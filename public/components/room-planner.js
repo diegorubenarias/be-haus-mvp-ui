@@ -72,6 +72,18 @@ class RoomPlanner extends HTMLElement {
                     background-color: #e9e9e9;
                     font-weight: bold;
                 }
+                     .header-cell {
+                    background-color: #0056b3; 
+                    color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; 
+                }
+                /* Estilo para Fines de Semana */
+                .weekend-cell {
+                    background-color: #f0f0f0 !important; /* Un gris claro */
+                    color: #555;
+                }
+                .weekend-header {
+                    background-color: #004494 !important; /* Un azul más oscuro */
+                }
             </style>
             <div class="month-selector">
                 <span>&lt; Septiembre</span> | <span>${this.currentMonth}</span> | <span>Noviembre &gt;</span>
@@ -119,18 +131,37 @@ class RoomPlanner extends HTMLElement {
 
    // ... dentro de RoomPlanner class ...
 
+   // ... dentro de RoomPlanner class ...
+
     renderGrid() {
         const grid = this.shadowRoot.getElementById('plannerGrid');
         grid.innerHTML = ''; 
 
-        // Aseguramos que el grid tenga el tamaño correcto si el número de días cambió
         this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${this.daysInMonth}, 40px)`;
 
+        // Calcular los días de la semana para el mes actual
+        let dayOfWeek = new Date(this.currentYear, this.currentMonthIndex, 1).getDay(); // 0=Dom, 1=Lun, ..., 6=Sab
+        const dayClasses = [];
+        for (let i = 0; i < this.daysInMonth; i++) {
+            // Si es sábado (6) o domingo (0)
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                dayClasses.push('weekend-cell');
+            } else {
+                dayClasses.push('');
+            }
+            dayOfWeek = (dayOfWeek + 1) % 7; // Avanzamos al siguiente día de la semana
+        }
 
         // Fila de encabezado (Días)
         grid.innerHTML += `<div class="cell header-cell room-header">Habitación</div>`; 
         for (let i = 1; i <= this.daysInMonth; i++) {
-            grid.innerHTML += `<div class="cell header-cell">${i}</div>`;
+            const headerCell = document.createElement('div');
+            headerCell.classList.add('cell', 'header-cell');
+            if (dayClasses[i - 1] === 'weekend-cell') {
+                headerCell.classList.add('weekend-header');
+            }
+            headerCell.textContent = i;
+            grid.appendChild(headerCell);
         }
 
         // Filas de Habitaciones y Celdas de Reserva
@@ -143,12 +174,20 @@ class RoomPlanner extends HTMLElement {
                 cell.dataset.roomId = room.id;
                 cell.dataset.day = i;
                 
-                // *** Verificar si este día está ocupado/reservado usando los datos FRESCOS ***
+                // Aplicar estilo de fin de semana a la celda
+                if (dayClasses[i - 1] === 'weekend-cell') {
+                    cell.classList.add('weekend-cell');
+                }
+
                 const booking = this.findBookingForDay(room.id, i);
                 if (booking) {
                     cell.classList.remove('status-liberated');
                     cell.classList.add(`status-${booking.status}`);
-                    cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`; // Mostrar solo el primer nombre
+                    // Asegurar que el color del fin de semana no sobrescriba el color de la reserva si está ocupada
+                    if(dayClasses[i - 1] === 'weekend-cell' && booking.status !== 'liberated') {
+                         cell.classList.remove('weekend-cell');
+                    }
+                    cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`;
                     cell.dataset.bookingId = booking.id;
                 }
                 
@@ -157,6 +196,9 @@ class RoomPlanner extends HTMLElement {
             }
         });
     }
+
+// ...
+
     
     findBookingForDay(roomId, day) {
         // Creamos la fecha objetivo para la comparación UTC

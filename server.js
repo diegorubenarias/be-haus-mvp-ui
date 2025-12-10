@@ -70,6 +70,10 @@ app.get('/dashboard', (req, res) => {
 app.get('/planner.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'planner.html'));
 });
+
+app.get('/reports.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'reports.html'));
+});
 // ----------------------------------------
 
 // --- Rutas de API REST ---

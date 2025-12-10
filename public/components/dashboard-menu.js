@@ -38,7 +38,7 @@ class DashboardMenu extends HTMLElement {
                     <li><a href="#">Stock/Minibar</a></li>
                     <li><a href="#">Servicios Limpieza</a></li>
                     <li><a href="#">Facturación</a></li>
-                    <li><a href="#">Reportes</a></li>
+                    <li><a href="/reports.html">Reportes</a></li>
                     <li><a href="/">Cerrar Sesión</a></li>
                 </ul>
             </nav>
