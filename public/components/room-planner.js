@@ -5,9 +5,16 @@ class RoomPlanner extends HTMLElement {
         
         this.rooms = [];
         this.bookings = [];
-        this.daysInMonth = 31; 
-        this.currentMonth = "Octubre 2025";
-        this.startDate = new Date('2025-10-01'); // Fecha de inicio real para calculos
+        
+        // --- DINÁMICO: Calcular mes y días actuales ---
+        this.today = new Date();
+        this.currentYear = this.today.getFullYear();
+        this.currentMonthIndex = this.today.getMonth(); // 0-indexed (Enero=0)
+        this.monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        this.currentMonthName = this.monthNames[this.currentMonthIndex];
+        // Calcular el número de días en el mes actual
+        this.daysInMonth = new Date(this.currentYear, this.currentMonthIndex + 1, 0).getDate();
+        this.startDate = new Date(this.currentYear, this.currentMonthIndex, 1);
         
         shadow.innerHTML = `
             <style>
@@ -110,9 +117,16 @@ class RoomPlanner extends HTMLElement {
         });
     }
 
+   // ... dentro de RoomPlanner class ...
+
     renderGrid() {
         const grid = this.shadowRoot.getElementById('plannerGrid');
-        
+        grid.innerHTML = ''; 
+
+        // Aseguramos que el grid tenga el tamaño correcto si el número de días cambió
+        this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${this.daysInMonth}, 40px)`;
+
+
         // Fila de encabezado (Días)
         grid.innerHTML += `<div class="cell header-cell room-header">Habitación</div>`; 
         for (let i = 1; i <= this.daysInMonth; i++) {
@@ -129,34 +143,37 @@ class RoomPlanner extends HTMLElement {
                 cell.dataset.roomId = room.id;
                 cell.dataset.day = i;
                 
-                // Verificar si este día está ocupado/reservado
+                // *** Verificar si este día está ocupado/reservado usando los datos FRESCOS ***
                 const booking = this.findBookingForDay(room.id, i);
                 if (booking) {
                     cell.classList.remove('status-liberated');
                     cell.classList.add(`status-${booking.status}`);
-                    // Mostrar iniciales o nombre corto
-                    cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status[0].toUpperCase()})`;
+                    cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`; // Mostrar solo el primer nombre
                     cell.dataset.bookingId = booking.id;
                 }
                 
+                cell.addEventListener('click', (event) => this.handleCellClick(event.target));
                 grid.appendChild(cell);
             }
         });
     }
-
-    // ... dentro de RoomPlanner class ...
-
+    
     findBookingForDay(roomId, day) {
-        // ... (esta función se mantiene igual, ya la usamos para encontrar la reserva) ...
-        const targetDate = new Date(this.startDate);
-        targetDate.setDate(day);
-
+        // Creamos la fecha objetivo para la comparación UTC
+        const targetDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
+        
         return this.bookings.find(b => {
-            const start = new Date(b.start_date + 'T00:00:00');
-            const end = new Date(b.end_date + 'T00:00:00');
-            return b.room_id === roomId && targetDate >= start && targetDate < end; 
+            // Convertimos las fechas de la BD a objetos Date UTC para una comparación fiable
+            const start = new Date(b.start_date + 'T00:00:00Z'); 
+            const end = new Date(b.end_date + 'T00:00:00Z');
+
+            // Comparamos si la fecha objetivo está dentro del rango [inicio, fin)
+            // Una reserva incluye la noche de inicio, pero termina la mañana del end_date
+            return b.room_id == roomId && targetDate >= start && targetDate < end; 
         });
     }
+
+// ... el resto de la clase (fetchData, refreshPlanner, handleCellClick) se mantiene ...
 
     addEventListeners() {
         // ... (se mantiene igual) ...
