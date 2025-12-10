@@ -1,10 +1,12 @@
 const express = require('express');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
+const cookieParser = require('cookie-parser'); 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Configuración de la Base de Datos ---
@@ -55,6 +57,17 @@ function seedDatabase(db) {
     });
 }
 // ----------------------------------------
+// --- MIDDLEWARE de Autenticación (NUEVO) ---
+function authenticateMiddleware(req, res, next) {
+    // En un sistema real usarías un token JWT, aquí usamos un ID de usuario simple en la cookie
+    if (req.cookies && req.cookies.user_id) {
+        // Podrías verificar si el user_id existe en la BD aquí para mayor seguridad
+        next(); // El usuario está autenticado, continuar con la ruta solicitada
+    } else {
+        // No autenticado, redirigir al login
+        res.redirect('/');
+    }
+}
 
 // --- Rutas de Frontend ---
 // La ruta '/' seguirá sirviendo el login.html
@@ -63,15 +76,15 @@ app.get('/', (req, res) => {
 });
 
 // Rutas protegidas (temporalmente solo por redirección frontend)
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-app.get('/planner.html', (req, res) => {
+app.get('/planner.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'planner.html'));
 });
 
-app.get('/reports.html', (req, res) => {
+app.get('/reports.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'reports.html'));
 });
 // ----------------------------------------
@@ -87,7 +100,7 @@ app.post('/api/login', (req, res) => {
             return;
         }
         if (user) {
-            // Login exitoso. En una app real, aquí generarías un token JWT o iniciarías una sesión.
+            res.cookie('user_id', user.id, { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 }); // Expira en 1 día
             res.status(200).json({ message: "Login exitoso", user: { id: user.id, username: user.username } });
         } else {
             res.status(401).json({ error: "Usuario o contraseña incorrectos" });
@@ -95,11 +108,14 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-
+app.post('/api/logout', (req, res) => {
+    res.clearCookie('user_id');
+    res.status(200).json({ message: "Sesión cerrada exitosamente" });
+});
 
 // Endpoints de habitaciones y reservas (sin cambios por ahora)
 // Endpoint para obtener todas las habitaciones
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', authenticateMiddleware, (req, res) => {
     db.all("SELECT * FROM rooms", [], (err, rows) => {
         if (err) {
             res.status(400).json({"error":err.message});
@@ -111,7 +127,7 @@ app.get('/api/rooms', (req, res) => {
         });
     });
 });
-app.get('/api/bookings', (req, res) => {
+app.get('/api/bookings', authenticateMiddleware,(req, res) => {
     db.all("SELECT * FROM bookings", [], (err, rows) => {
         if (err) {
             res.status(400).json({"error":err.message});
@@ -125,7 +141,7 @@ app.get('/api/bookings', (req, res) => {
 });
 
 // Endpoint para crear una nueva reserva (ACTUALIZADO CON VALIDACIÓN)
-app.post('/api/bookings', (req, res) => {
+app.post('/api/bookings', authenticateMiddleware,(req, res) => {
     const { room_id, client_name, start_date, end_date, status } = req.body;
 
     if (!room_id || !client_name || !start_date || !end_date || !status) {
@@ -172,7 +188,7 @@ app.post('/api/bookings', (req, res) => {
 });
 
 // Endpoint para ACTUALIZAR una reserva existente
-app.put('/api/bookings/:id', (req, res) => {
+app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     const { client_name, start_date, end_date, status, room_id } = req.body;
     const { id } = req.params;
 
@@ -191,7 +207,7 @@ app.put('/api/bookings/:id', (req, res) => {
 });
 
 // Endpoint para ELIMINAR una reserva
-app.delete('/api/bookings/:id', (req, res) => {
+app.delete('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     const { id } = req.params;
     db.run('DELETE FROM bookings WHERE id = ?', id, function (err) {
         if (err) {
