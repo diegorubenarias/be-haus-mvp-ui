@@ -216,15 +216,19 @@ app.post('/api/bookings', authenticateMiddleware,(req, res) => {
 // ... dentro de server.js ...
 
 // Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO CON VALIDACIÓN)
+// ... dentro de server.js ...
+
+// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO con lógica de Check-In/Out)
 app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     const { client_name, start_date, end_date, status, room_id } = req.body;
-    const { id } = req.params; // ID de la reserva que estamos editando
+    const { id } = req.params; 
 
-    // 1. Lógica de validación de superposición, excluyendo la reserva actual (id <> ?)
+    // Lógica de validación de superposición (se mantiene igual, excluyendo la reserva actual)
+    // ... (Mantener la lógica overlapQuery y db.get(...) de validación de superposición aquí) ...
     const overlapQuery = `
         SELECT COUNT(*) as count FROM bookings 
         WHERE room_id = ? 
-        AND id <> ? -- EXCLUIR la reserva actual de la verificación
+        AND id <> ?
         AND (
             (start_date BETWEEN ? AND ?) OR 
             (end_date BETWEEN ? AND ?) OR
@@ -232,50 +236,57 @@ app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
             (? BETWEEN start_date AND end_date)
         )`;
     
-    db.get(overlapQuery, 
-        [room_id, id, start_date, end_date, start_date, end_date, start_date, end_date], 
-        (err, row) => {
-        if (err) {
-            res.status(500).json({"error": err.message});
-            return;
-        }
-
+    db.get(overlapQuery, [room_id, id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
+        if (err) return res.status(500).json({"error": err.message});
         if (row.count > 0) {
-            // Si count es mayor que 0, hay una superposición con OTRA reserva.
-            res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada por otra reserva en esas fechas." });
-            return;
+            return res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada por otra reserva en esas fechas." });
         }
 
-        // 2. Si no hay superposición, procede con la actualización.
-        const updateQuery = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
-        db.run(updateQuery, [client_name, start_date, end_date, status, room_id, id], function (err) {
-            if (err) {
-                res.status(400).json({"error": err.message});
-                return;
-            }
-            if (this.changes === 0) {
-                // Esto podría pasar si la reserva no existe o si los datos son idénticos
-                res.status(404).json({"error": "Reserva no encontrada o no se realizaron cambios."});
-                return;
-            }
-            res.json({ message: "Reserva actualizada exitosamente", changes: this.changes });
-        });
+        // Lógica de Check-Out: Si el nuevo estado es 'checked-out', ensuciar la habitación.
+        if (status === 'checked-out') {
+            const updateRoomQuery = `UPDATE rooms SET clean_status = 'dirty' WHERE id = ?`;
+            db.run(updateRoomQuery, [room_id], (err) => {
+                if (err) console.error("Error al actualizar estado de limpieza durante check-out:", err.message);
+                // Continúa con la actualización de la reserva
+                finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res);
+            });
+        } else {
+            // Para otros estados (reserved, occupied/checked-in), solo actualiza la reserva
+            finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res);
+        }
     });
 });
 
+// Función auxiliar para finalizar la actualización de la reserva
+function finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res) {
+    const updateQuery = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
+    db.run(updateQuery, [client_name, start_date, end_date, status, room_id, id], function (err) {
+        if (err) return res.status(400).json({"error": err.message});
+        res.json({ message: "Reserva actualizada exitosamente.", changes: this.changes });
+    });
+}
+
 // Endpoint para ELIMINAR una reserva
+// ... dentro de server.js ...
+
+// Endpoint para ELIMINAR/CANCELAR una reserva (SOLO PREVIO AL CHECK-IN)
 app.delete('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     const { id } = req.params;
-    db.run('DELETE FROM bookings WHERE id = ?', id, function (err) {
-        if (err) {
-            res.status(400).json({"error": err.message});
-            return;
+
+    // Verificar el estado actual antes de eliminar
+    db.get('SELECT status, room_id FROM bookings WHERE id = ?', [id], (err, row) => {
+        if (err) return res.status(500).json({ "error": err.message });
+        if (!row) return res.status(404).json({ "error": "Reserva no encontrada." });
+
+        if (row.status === 'occupied' || row.status === 'checked-in') {
+            return res.status(403).json({ "error": "No se puede cancelar una reserva con check-in realizado. Use el proceso de check-out." });
         }
-        if (this.changes === 0) {
-            res.status(404).json({"error": "Reserva no encontrada."});
-            return;
-        }
-        res.json({ message: "Reserva eliminada exitosamente", changes: this.changes });
+
+        // Si es 'reserved' o 'liberated', se puede eliminar (cancelar)
+        db.run('DELETE FROM bookings WHERE id = ?', id, function (err) {
+            if (err) return res.status(400).json({ "error": err.message });
+            res.json({ message: "Reserva cancelada exitosamente.", changes: this.changes });
+        });
     });
 });
 

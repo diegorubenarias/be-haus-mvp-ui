@@ -33,7 +33,8 @@ class BookingModal extends HTMLElement {
                 .btn-save { background-color: #0056b3; color: white; }
                 .btn-delete { background-color: #f44336; color: white; }
                 .btn-cancel { background-color: #ccc; color: black; }
-                
+                .btn-checkin { background-color: #ff9800; color: white; }
+                .btn-checkout { background-color: #607d8b; color: white; }
                 .billing-section { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
                 .consumption-item { display: flex; justify-content: space-between; padding: 5px 0; }
                 .total-amount { font-size: 1.2em; font-weight: bold; margin-top: 10px; }
@@ -56,7 +57,6 @@ class BookingModal extends HTMLElement {
                                 <option value="liberated">Liberada</option>
                                 <option value="reserved">Reservada</option>
                                 <option value="occupied">Ocupada</option>
-                                <option value="blocked">Bloqueada</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -72,7 +72,6 @@ class BookingModal extends HTMLElement {
                             <input type="date" id="endDate">
                         </div>
 
-                        <!-- SECCION DE FACTURACION -->
                         <div class="billing-section" id="billingSection" style="display:none;">
                             <h4>Facturación y Consumos</h4>
                             <p>Estadía Total: <span id="stayDuration">0 noches</span> | Base: $<span id="stayCost">0.00</span></p>
@@ -80,7 +79,6 @@ class BookingModal extends HTMLElement {
                             <div id="consumptionsList"></div>
                             <div class="total-amount">Total a Pagar: $<span id="totalAmountDisplay">0.00</span></div>
                             
-                            <!-- Formulario para añadir nuevo consumo -->
                             <hr>
                             <div class="form-group">
                                 <input type="text" id="consumptionDescription" placeholder="Descripción (ej: Minibar, Lavandería)">
@@ -91,8 +89,10 @@ class BookingModal extends HTMLElement {
 
                         <div class="button-group">
                             <button type="button" class="btn-cancel" id="cancelButton">Cancelar</button>
-                            <button type="button" class="btn-delete" id="deleteButton" style="display:none;">Eliminar</button>
-                            <button type="button" class="btn-save">Guardar Cambios</button>
+                            <button type="button" class="btn-delete" id="deleteButton" style="display:none;">Cancelar Reserva (Eliminar)</button>
+                            <button type="button" class="btn-checkin" id="checkInButton" style="display:none;">Realizar Check-In</button>
+                            <button type="button" class="btn-checkout" id="checkOutButton" style="display:none;">Facturar y Check-Out</button>
+                            <button type="button" class="btn-save" id="saveButton">Guardar Cambios</button>
                         </div>
                     </form>
                 </div>
@@ -101,16 +101,38 @@ class BookingModal extends HTMLElement {
     }
 
     connectedCallback() {
+        // Adjuntamos todos los event listeners a los IDs/clases correctas
         this.shadow.getElementById('closeModal').addEventListener('click', () => this.closeModal());
         this.shadow.getElementById('cancelButton').addEventListener('click', () => this.closeModal());
         
-        // Listener para los botones de acción
         this.shadow.getElementById('deleteButton').addEventListener('click', () => this.handleDelete());
-        this.shadow.querySelector('.btn-save').addEventListener('click', (e) => this.handleSave(e));
+        this.shadow.getElementById('checkInButton').addEventListener('click', () => this.handleCheckIn());
+        this.shadow.getElementById('checkOutButton').addEventListener('click', () => this.handleCheckOut());
+        
+        // El botón de guardar cambios manual
+        this.shadow.getElementById('saveButton').addEventListener('click', (e) => this.handleSave(e));
+        
+        // El botón para añadir consumos
         this.shadow.getElementById('addConsumptionButton').addEventListener('click', () => this.handleAddConsumption());
+
+        // CLAVE: Escuchar el evento personalizado en el documento principal
+        document.addEventListener('open-booking-modal', (e) => this.openModal(e.detail));
     }
 
-    // ... dentro de BookingModal class ...
+    // NUEVO: Funciones de Check-In/Out
+    handleCheckIn() {
+        this.shadow.getElementById('statusSelect').value = 'occupied';
+        this.handleSave(); 
+    }
+
+    handleCheckOut() {
+        const total = this.shadow.getElementById('totalAmountDisplay').textContent;
+        if (confirm(`El total a pagar es $${total}. ¿Confirmar Check-Out y finalizar estadía?`)) {
+            this.shadow.getElementById('statusSelect').value = 'checked-out';
+            this.handleSave();
+        }
+    }
+
 
     openModal(data) {
         this.currentBookingId = data.bookingId;
@@ -122,11 +144,15 @@ class BookingModal extends HTMLElement {
         this.shadow.getElementById('startDate').value = '';
         this.shadow.getElementById('endDate').value = '';
 
+        // Ocultar todos los botones de acción dinámicos por defecto
+        this.shadow.getElementById('deleteButton').style.display = 'none';
+        this.shadow.getElementById('checkInButton').style.display = 'none';
+        this.shadow.getElementById('checkOutButton').style.display = 'none';
+        this.shadow.getElementById('saveButton').style.display = 'inline-block'; // Guardar cambios manual
+
         if (this.currentBookingId && data.bookingDetails) {
-            // ... (Lógica de edición existente: precarga todos los campos de fecha desde details) ...
             const details = data.bookingDetails;
             this.shadow.getElementById('modalTitle').textContent = `Editar Reserva #${this.currentBookingId}`;
-            this.shadow.getElementById('deleteButton').style.display = 'inline-block';
             this.shadow.getElementById('billingSection').style.display = 'block';
 
             this.shadow.getElementById('statusSelect').value = details.status;
@@ -136,13 +162,22 @@ class BookingModal extends HTMLElement {
             
             this.loadBillingDetails();
 
+            // Lógica para mostrar botones de acción según el estado
+            if (details.status === 'reserved') {
+                this.shadow.getElementById('deleteButton').style.display = 'inline-block'; // Botón Cancelar Reserva
+                this.shadow.getElementById('checkInButton').style.display = 'inline-block'; // Botón Check-In
+            } else if (details.status === 'occupied') {
+                this.shadow.getElementById('checkOutButton').style.display = 'inline-block'; // Botón Check-Out
+            } else if (details.status === 'checked-out') {
+                // Si ya hizo check-out, ocultar botones de acción principales
+                this.shadow.getElementById('saveButton').style.display = 'none';
+                this.shadow.getElementById('billingSection').style.display = 'block'; // Mostrar factura final
+            }
+
         } else {
             // Lógica para NUEVA reserva: usar la fecha clickeada
             this.shadow.getElementById('modalTitle').textContent = `Nueva Reserva para Hab ${data.roomId}`;
-            this.shadow.getElementById('deleteButton').style.display = 'none';
             this.shadow.getElementById('billingSection').style.display = 'none';
-
-            // *** CLAVE: Usar la fecha clickeada para precargar Start Date ***
             if (data.clickedDate) {
                 this.shadow.getElementById('startDate').value = data.clickedDate;
             }
@@ -150,7 +185,6 @@ class BookingModal extends HTMLElement {
         
         this.shadow.getElementById('bookingModalOverlay').style.display = 'flex';
     }
-
     
     closeModal() {
         this.shadow.getElementById('bookingModalOverlay').style.display = 'none';
@@ -201,7 +235,7 @@ class BookingModal extends HTMLElement {
     }
 
     async handleDelete() {
-        if (!confirm("¿Estás seguro de que deseas cancelar esta reserva?")) return;
+        if (!confirm("¿Estás seguro de que deseas CANCELAR esta reserva (el cliente no ingresó)?")) return;
 
         try {
             const response = await fetch(`/api/bookings/${this.currentBookingId}`, {
@@ -278,7 +312,6 @@ class BookingModal extends HTMLElement {
             body: JSON.stringify(newConsumption)
         });
 
-        // Refrescar la sección de facturación
         this.loadBillingDetails();
         this.shadow.getElementById('consumptionDescription').value = '';
         this.shadow.getElementById('consumptionAmount').value = '';
