@@ -18,7 +18,7 @@ class DashboardMenu extends HTMLElement {
                     <li><a href="/planner.html">Ocupación/Reservas</a></li>
                     <li><a href="/reports.html">Reportes</a></li>
                     <li><a href="#">Stock/Minibar</a></li>
-                    <li><a href="#">Servicios Limpieza</a></li>
+                    <li><a href="/housekeeping.html">Limpieza</a></li>
                     <!-- Reemplazamos el <a> por un botón que maneja el logout real -->
                     <li><button class="logout-btn" id="logoutButton">Cerrar Sesión</button></li>
                 </ul>

@@ -18,7 +18,9 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            price REAL NOT NULL DEFAULT 0.0 -- NUEVO: Precio base por noche
+            price REAL NOT NULL DEFAULT 0.0,
+            -- NUEVO: Estado de limpieza (clean, dirty, servicing)
+            clean_status TEXT NOT NULL DEFAULT 'dirty' 
         )`);
         db.run(`CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,6 +107,11 @@ app.get('/planner.html', authenticateMiddleware, (req, res) => {
 app.get('/reports.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'reports.html'));
 });
+
+app.get('/housekeeping.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'housekeeping.html'));
+});
+
 // ----------------------------------------
 
 // --- Rutas de API REST ---
@@ -298,6 +305,25 @@ app.post('/api/consumptions', authenticateMiddleware, (req, res) => {
         res.status(201).json({ id: this.lastID, message: "Consumo agregado." });
     });
 });
+
+app.put('/api/rooms/status/:roomId', authenticateMiddleware, (req, res) => {
+    const { clean_status } = req.body;
+    const { roomId } = req.params;
+
+    if (!clean_status) {
+        return res.status(400).json({ error: "Falta el estado de limpieza." });
+    }
+
+    const query = `UPDATE rooms SET clean_status = ? WHERE id = ?`;
+    db.run(query, [clean_status, roomId], function (err) {
+        if (err) {
+            res.status(400).json({"error": err.message});
+            return;
+        }
+        res.json({ message: "Estado de limpieza actualizado.", changes: this.changes });
+    });
+});
+
 
 
 
