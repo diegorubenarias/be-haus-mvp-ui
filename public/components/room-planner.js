@@ -144,20 +144,22 @@ class RoomPlanner extends HTMLElement {
         });
     }
 
+    // ... dentro de RoomPlanner class ...
+
     findBookingForDay(roomId, day) {
-        // Lógica simplificada para encontrar una reserva en un día específico de Octubre 2025
+        // ... (esta función se mantiene igual, ya la usamos para encontrar la reserva) ...
         const targetDate = new Date(this.startDate);
         targetDate.setDate(day);
 
         return this.bookings.find(b => {
-            const start = new Date(b.start_date + 'T00:00:00'); // Asume hora 00:00:00
+            const start = new Date(b.start_date + 'T00:00:00');
             const end = new Date(b.end_date + 'T00:00:00');
-            // Las reservas suelen incluir la noche de inicio pero no la de salida en ocupación visual
             return b.room_id === roomId && targetDate >= start && targetDate < end; 
         });
     }
 
     addEventListeners() {
+        // ... (se mantiene igual) ...
         this.shadowRoot.querySelectorAll('.cell').forEach(cell => {
             if (!cell.classList.contains('header-cell')) {
                 cell.addEventListener('click', () => this.handleCellClick(cell));
@@ -168,16 +170,25 @@ class RoomPlanner extends HTMLElement {
     handleCellClick(cell) {
         const roomId = cell.dataset.roomId;
         const day = cell.dataset.day;
-        // Pasa el ID de la reserva si existe, si no, pasa null para una nueva reserva
         const bookingId = cell.dataset.bookingId || null; 
+        
+        let bookingDetails = null;
+
+        // Si existe un bookingId, busca los detalles completos para pasarlos al modal
+        if (bookingId) {
+            bookingDetails = this.bookings.find(b => b.id == bookingId); // Usar == porque bookingId viene como string de dataset
+        }
         
         const event = new CustomEvent('open-booking-modal', {
             bubbles: true,
             composed: true, 
-            detail: { roomId, day, bookingId }
+            // Pasa los detalles completos, incluyendo el ID de la reserva si existe
+            detail: { roomId, day, bookingId, bookingDetails } 
         });
         this.dispatchEvent(event);
     }
+// ... fin de RoomPlanner class ...
+
 }
 
 customElements.define('room-planner', RoomPlanner);

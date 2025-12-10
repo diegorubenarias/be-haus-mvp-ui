@@ -92,10 +92,116 @@ app.post('/api/login', (req, res) => {
 });
 
 
+
 // Endpoints de habitaciones y reservas (sin cambios por ahora)
-app.get('/api/rooms', (req, res) => { /* ... */ }); // (Mantener el código anterior)
-app.get('/api/bookings', (req, res) => { /* ... */ }); // (Mantener el código anterior)
-app.post('/api/bookings', (req, res) => { /* ... */ }); // (Mantener el código anterior)
+// Endpoint para obtener todas las habitaciones
+app.get('/api/rooms', (req, res) => {
+    db.all("SELECT * FROM rooms", [], (err, rows) => {
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        res.json({
+            message: "success",
+            data: rows
+        });
+    });
+});
+app.get('/api/bookings', (req, res) => {
+    db.all("SELECT * FROM bookings", [], (err, rows) => {
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        res.json({
+            message: "success",
+            data: rows
+        });
+    });
+});
+
+// Endpoint para crear una nueva reserva (ACTUALIZADO CON VALIDACIÓN)
+app.post('/api/bookings', (req, res) => {
+    const { room_id, client_name, start_date, end_date, status } = req.body;
+
+    if (!room_id || !client_name || !start_date || !end_date || !status) {
+        return res.status(400).json({ error: "Faltan campos requeridos." });
+    }
+    
+    // Lógica de validación de superposición:
+    // Busca reservas existentes para la misma habitación que se superpongan con las fechas solicitadas.
+    const query = `SELECT COUNT(*) as count FROM bookings 
+                   WHERE room_id = ? 
+                   AND (
+                       (start_date BETWEEN ? AND ?) OR 
+                       (end_date BETWEEN ? AND ?) OR
+                       (? BETWEEN start_date AND end_date) OR
+                       (? BETWEEN start_date AND end_date)
+                   )`;
+    
+    db.get(query, [room_id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
+        if (err) {
+            res.status(500).json({"error": err.message});
+            return;
+        }
+
+        if (row.count > 0) {
+            // Si count es mayor que 0, hay una superposición.
+            res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada o reservada en esas fechas." });
+            return;
+        }
+
+        // Si no hay superposición, procede con la inserción.
+        const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status) VALUES (?,?,?,?,?)';
+        db.run(insert, [room_id, client_name, start_date, end_date, status], function (err) {
+            if (err) {
+                res.status(400).json({"error": err.message});
+                return;
+            }
+            res.status(201).json({
+                message: "Reserva creada exitosamente",
+                data: req.body,
+                id: this.lastID
+            });
+        });
+    });
+});
+
+// Endpoint para ACTUALIZAR una reserva existente
+app.put('/api/bookings/:id', (req, res) => {
+    const { client_name, start_date, end_date, status, room_id } = req.body;
+    const { id } = req.params;
+
+    const query = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
+    db.run(query, [client_name, start_date, end_date, status, room_id, id], function (err) {
+        if (err) {
+            res.status(400).json({"error": err.message});
+            return;
+        }
+        if (this.changes === 0) {
+            res.status(404).json({"error": "Reserva no encontrada."});
+            return;
+        }
+        res.json({ message: "Reserva actualizada exitosamente", changes: this.changes });
+    });
+});
+
+// Endpoint para ELIMINAR una reserva
+app.delete('/api/bookings/:id', (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM bookings WHERE id = ?', id, function (err) {
+        if (err) {
+            res.status(400).json({"error": err.message});
+            return;
+        }
+        if (this.changes === 0) {
+            res.status(404).json({"error": "Reserva no encontrada."});
+            return;
+        }
+        res.json({ message: "Reserva eliminada exitosamente", changes: this.changes });
+    });
+});
+
 
 // ----------------------------------------
 
