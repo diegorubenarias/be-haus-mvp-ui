@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificador de Ocupación - Hotel MVP</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Cargamos los componentes necesarios -->
+    <script src="components/dashboard-menu.js" defer></script>
+    <script src="components/room-planner.js" defer></script>
+    <script src="components/booking-modal.js" defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <dashboard-menu></dashboard-menu>
+        <main class="main-content">
+            <header>
+                <h1>Planificador de Ocupación y Reservas</h1>
+            </header>
+            <!-- Aquí se cargará nuestro componente principal del "Excel" -->
+            <room-planner></room-planner>
+        </main>
+    </div>
+     <!-- Añadimos el modal aquí, fuera del main-content para que flote bien -->
+    <booking-modal></booking-modal> 
+</body>
+</html>
