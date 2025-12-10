@@ -206,21 +206,53 @@ app.post('/api/bookings', authenticateMiddleware,(req, res) => {
 });
 
 // Endpoint para ACTUALIZAR una reserva existente
+// ... dentro de server.js ...
+
+// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO CON VALIDACIÓN)
 app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     const { client_name, start_date, end_date, status, room_id } = req.body;
-    const { id } = req.params;
+    const { id } = req.params; // ID de la reserva que estamos editando
 
-    const query = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
-    db.run(query, [client_name, start_date, end_date, status, room_id, id], function (err) {
+    // 1. Lógica de validación de superposición, excluyendo la reserva actual (id <> ?)
+    const overlapQuery = `
+        SELECT COUNT(*) as count FROM bookings 
+        WHERE room_id = ? 
+        AND id <> ? -- EXCLUIR la reserva actual de la verificación
+        AND (
+            (start_date BETWEEN ? AND ?) OR 
+            (end_date BETWEEN ? AND ?) OR
+            (? BETWEEN start_date AND end_date) OR
+            (? BETWEEN start_date AND end_date)
+        )`;
+    
+    db.get(overlapQuery, 
+        [room_id, id, start_date, end_date, start_date, end_date, start_date, end_date], 
+        (err, row) => {
         if (err) {
-            res.status(400).json({"error": err.message});
+            res.status(500).json({"error": err.message});
             return;
         }
-        if (this.changes === 0) {
-            res.status(404).json({"error": "Reserva no encontrada."});
+
+        if (row.count > 0) {
+            // Si count es mayor que 0, hay una superposición con OTRA reserva.
+            res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada por otra reserva en esas fechas." });
             return;
         }
-        res.json({ message: "Reserva actualizada exitosamente", changes: this.changes });
+
+        // 2. Si no hay superposición, procede con la actualización.
+        const updateQuery = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
+        db.run(updateQuery, [client_name, start_date, end_date, status, room_id, id], function (err) {
+            if (err) {
+                res.status(400).json({"error": err.message});
+                return;
+            }
+            if (this.changes === 0) {
+                // Esto podría pasar si la reserva no existe o si los datos son idénticos
+                res.status(404).json({"error": "Reserva no encontrada o no se realizaron cambios."});
+                return;
+            }
+            res.json({ message: "Reserva actualizada exitosamente", changes: this.changes });
+        });
     });
 });
 

@@ -110,13 +110,20 @@ class BookingModal extends HTMLElement {
         this.shadow.getElementById('addConsumptionButton').addEventListener('click', () => this.handleAddConsumption());
     }
 
+    // ... dentro de BookingModal class ...
+
     openModal(data) {
         this.currentBookingId = data.bookingId;
         this.shadow.getElementById('roomIdInput').value = data.roomId;
         this.shadow.getElementById('roomNameDisplay').value = data.roomName;
         this.currentRoomPrice = data.roomPrice || 0;
 
+        // Limpiamos las fechas por defecto para nuevas reservas
+        this.shadow.getElementById('startDate').value = '';
+        this.shadow.getElementById('endDate').value = '';
+
         if (this.currentBookingId && data.bookingDetails) {
+            // ... (Lógica de edición existente: precarga todos los campos de fecha desde details) ...
             const details = data.bookingDetails;
             this.shadow.getElementById('modalTitle').textContent = `Editar Reserva #${this.currentBookingId}`;
             this.shadow.getElementById('deleteButton').style.display = 'inline-block';
@@ -130,13 +137,20 @@ class BookingModal extends HTMLElement {
             this.loadBillingDetails();
 
         } else {
+            // Lógica para NUEVA reserva: usar la fecha clickeada
             this.shadow.getElementById('modalTitle').textContent = `Nueva Reserva para Hab ${data.roomId}`;
             this.shadow.getElementById('deleteButton').style.display = 'none';
             this.shadow.getElementById('billingSection').style.display = 'none';
+
+            // *** CLAVE: Usar la fecha clickeada para precargar Start Date ***
+            if (data.clickedDate) {
+                this.shadow.getElementById('startDate').value = data.clickedDate;
+            }
         }
         
         this.shadow.getElementById('bookingModalOverlay').style.display = 'flex';
     }
+
     
     closeModal() {
         this.shadow.getElementById('bookingModalOverlay').style.display = 'none';

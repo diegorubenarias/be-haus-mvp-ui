@@ -5,88 +5,42 @@ class RoomPlanner extends HTMLElement {
         
         this.rooms = [];
         this.bookings = [];
-        
-        // --- DINÁMICO: Calcular mes y días actuales ---
         this.today = new Date();
-        this.currentYear = this.today.getFullYear();
-        this.currentMonthIndex = this.today.getMonth(); // 0-indexed (Enero=0)
+        this.currentViewDate = new Date(this.today.getFullYear(), this.today.getMonth(), 1);
         this.monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        this.currentMonthName = this.monthNames[this.currentMonthIndex];
-        // Calcular el número de días en el mes actual
-        this.daysInMonth = new Date(this.currentYear, this.currentMonthIndex + 1, 0).getDate();
-        this.startDate = new Date(this.currentYear, this.currentMonthIndex, 1);
-        
+
+        this.daysInMonth = 0;
+        this.currentYear = 0;
+        this.currentMonthIndex = 0;
+        this.startDate = null;
+
         shadow.innerHTML = `
             <style>
-                /* (Mantén los mismos estilos CSS que antes para la estética de Excel) */
-                .planner-container {
-                    overflow-x: auto; 
-                    background: white;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                    border-radius: 4px;
-                }
-                .planner-grid {
-                    display: grid;
-                    grid-template-columns: 150px repeat(${this.daysInMonth}, 40px);
-                    border-collapse: collapse;
-                    width: max-content; 
-                }
-                .cell {
-                    border: 1px solid #e0e0e0;
-                    padding: 8px 5px;
-                    text-align: center;
-                    cursor: pointer;
-                    min-height: 20px;
-                    box-sizing: border-box;
-                    transition: background-color 0.2s;
-                    white-space: nowrap; /* Evita que el texto de la reserva se rompa */
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .cell:hover {
-                    background-color: #f2f2f2;
-                }
-                .header-cell {
-                    background-color: #0056b3;
-                    color: white;
-                    font-weight: bold;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                }
-                .room-header {
-                    background-color: #f9f9f9;
-                    color: #333;
-                    text-align: left;
-                    font-weight: normal;
-                    position: sticky; 
-                    left: 0; 
-                    z-index: 5;
-                }
+                .planner-container { overflow-x: auto; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 4px; }
+                .planner-grid { display: grid; border-collapse: collapse; width: max-content; }
+                .cell { border: 1px solid #e0e0e0; padding: 8px 5px; text-align: center; cursor: pointer; min-height: 20px; box-sizing: border-box; transition: background-color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .cell:hover { background-color: #f2f2f2; }
+                .header-cell { background-color: #0056b3; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+                .room-header { background-color: #f9f9f9; color: #333; text-align: left; font-weight: normal; position: sticky; left: 0; z-index: 5; }
+                .weekend-cell { background-color: #f0f0f0 !important; color: #555; }
+                .weekend-header { background-color: #004494 !important; }
                 .status-reserved { background-color: #ffeb3b; color: #333; }
                 .status-occupied { background-color: #4caf50; color: white; }
                 .status-blocked { background-color: #f44336; color: white; }
                 .status-liberated { background-color: white; }
-                .month-selector {
-                    padding: 10px;
-                    background-color: #e9e9e9;
-                    font-weight: bold;
+                
+                .month-selector { 
+                    padding: 10px; background-color: #e9e9e9; font-weight: bold; 
+                    display: flex; justify-content: space-between; align-items: center;
                 }
-                     .header-cell {
-                    background-color: #0056b3; 
-                    color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; 
-                }
-                /* Estilo para Fines de Semana */
-                .weekend-cell {
-                    background-color: #f0f0f0 !important; /* Un gris claro */
-                    color: #555;
-                }
-                .weekend-header {
-                    background-color: #004494 !important; /* Un azul más oscuro */
+                .nav-button {
+                    background: #0056b3; color: white; border: none; padding: 5px 10px; cursor: pointer;
                 }
             </style>
             <div class="month-selector">
-                <span>&lt; Septiembre</span> | <span>${this.currentMonth}</span> | <span>Noviembre &gt;</span>
+                <button class="nav-button" id="prevMonth">&lt; Anterior</button>
+                <span id="currentMonthDisplay">Mes Actual</span>
+                <button class="nav-button" id="nextMonth">Siguiente &gt;</button>
             </div>
             <div class="planner-container">
                 <div class="planner-grid" id="plannerGrid">
@@ -97,12 +51,17 @@ class RoomPlanner extends HTMLElement {
     }
 
     async connectedCallback() {
-        // Cargar datos reales del backend
-        await this.fetchData();
-        this.renderGrid();
-        this.addEventListeners();
-        // Escucha el evento de 'booking-saved' para refrescar la vista
+        // CLAVE: Esperar a que los datos se carguen antes de renderizar
+        await this.fetchData(); 
+        
+        this.renderView();
+
+        // Usamos delegación de eventos en el contenedor principal
+        this.shadowRoot.getElementById('plannerGrid').addEventListener('click', (event) => this.handleGridClick(event));
+        
         document.addEventListener('booking-saved', () => this.refreshPlanner());
+        this.shadowRoot.getElementById('prevMonth').addEventListener('click', () => this.navigateMonth(-1));
+        this.shadowRoot.getElementById('nextMonth').addEventListener('click', () => this.navigateMonth(1));
     }
 
     async fetchData() {
@@ -116,22 +75,34 @@ class RoomPlanner extends HTMLElement {
 
             this.rooms = roomsData.data;
             this.bookings = bookingsData.data;
+            console.log("Datos cargados. Habitaciones:", this.rooms.length, "Reservas:", this.bookings.length);
         } catch (error) {
             console.error("Error fetching data:", error);
         }
     }
 
     refreshPlanner() {
-        // Vuelve a cargar los datos y renderiza la cuadrícula para reflejar cambios
+        console.log("Refrescando planificador...");
         this.fetchData().then(() => {
-            this.shadowRoot.getElementById('plannerGrid').innerHTML = ''; // Limpiar grid anterior
-            this.renderGrid();
+            this.renderView();
         });
     }
 
-   // ... dentro de RoomPlanner class ...
+    navigateMonth(offset) {
+        this.currentViewDate.setMonth(this.currentViewDate.getMonth() + offset);
+        this.renderView();
+    }
 
-   // ... dentro de RoomPlanner class ...
+    renderView() {
+        this.currentYear = this.currentViewDate.getFullYear();
+        this.currentMonthIndex = this.currentViewDate.getMonth();
+        this.daysInMonth = new Date(this.currentYear, this.currentMonthIndex + 1, 0).getDate();
+        this.startDate = new Date(this.currentYear, this.currentMonthIndex, 1);
+
+        this.shadowRoot.getElementById('currentMonthDisplay').textContent = `${this.monthNames[this.currentMonthIndex]} ${this.currentYear}`;
+        
+        this.renderGrid();
+    }
 
     renderGrid() {
         const grid = this.shadowRoot.getElementById('plannerGrid');
@@ -139,20 +110,13 @@ class RoomPlanner extends HTMLElement {
 
         this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${this.daysInMonth}, 40px)`;
 
-        // Calcular los días de la semana para el mes actual
-        let dayOfWeek = new Date(this.currentYear, this.currentMonthIndex, 1).getDay(); // 0=Dom, 1=Lun, ..., 6=Sab
+        let dayOfWeek = new Date(this.currentYear, this.currentMonthIndex, 1).getDay();
         const dayClasses = [];
         for (let i = 0; i < this.daysInMonth; i++) {
-            // Si es sábado (6) o domingo (0)
-            if (dayOfWeek === 0 || dayOfWeek === 6) {
-                dayClasses.push('weekend-cell');
-            } else {
-                dayClasses.push('');
-            }
-            dayOfWeek = (dayOfWeek + 1) % 7; // Avanzamos al siguiente día de la semana
+            dayClasses.push((dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend-cell' : '');
+            dayOfWeek = (dayOfWeek + 1) % 7; 
         }
 
-        // Fila de encabezado (Días)
         grid.innerHTML += `<div class="cell header-cell room-header">Habitación</div>`; 
         for (let i = 1; i <= this.daysInMonth; i++) {
             const headerCell = document.createElement('div');
@@ -164,7 +128,6 @@ class RoomPlanner extends HTMLElement {
             grid.appendChild(headerCell);
         }
 
-        // Filas de Habitaciones y Celdas de Reserva
         this.rooms.forEach(room => {
             grid.innerHTML += `<div class="cell room-header" data-room-id="${room.id}">${room.name}</div>`;
             
@@ -174,7 +137,6 @@ class RoomPlanner extends HTMLElement {
                 cell.dataset.roomId = room.id;
                 cell.dataset.day = i;
                 
-                // Aplicar estilo de fin de semana a la celda
                 if (dayClasses[i - 1] === 'weekend-cell') {
                     cell.classList.add('weekend-cell');
                 }
@@ -183,57 +145,63 @@ class RoomPlanner extends HTMLElement {
                 if (booking) {
                     cell.classList.remove('status-liberated');
                     cell.classList.add(`status-${booking.status}`);
-                    // Asegurar que el color del fin de semana no sobrescriba el color de la reserva si está ocupada
                     if(dayClasses[i - 1] === 'weekend-cell' && booking.status !== 'liberated') {
                          cell.classList.remove('weekend-cell');
                     }
-                    cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`;
+                    cell.textContent = `${booking.client_name.split(' ')} (${booking.status.charAt(0).toUpperCase()})`;
                     cell.dataset.bookingId = booking.id;
                 }
                 
-                cell.addEventListener('click', (event) => this.handleCellClick(event.target));
+                // NO adjuntamos listeners individuales aquí (usamos delegación)
+                
                 grid.appendChild(cell);
             }
         });
     }
-
-// ...
-
     
     findBookingForDay(roomId, day) {
-        // Creamos la fecha objetivo para la comparación UTC
         const targetDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
         
         return this.bookings.find(b => {
-            // Convertimos las fechas de la BD a objetos Date UTC para una comparación fiable
             const start = new Date(b.start_date + 'T00:00:00Z'); 
             const end = new Date(b.end_date + 'T00:00:00Z');
 
-            // Comparamos si la fecha objetivo está dentro del rango [inicio, fin)
-            // Una reserva incluye la noche de inicio, pero termina la mañana del end_date
             return b.room_id == roomId && targetDate >= start && targetDate < end; 
         });
     }
 
-// ... el resto de la clase (fetchData, refreshPlanner, handleCellClick) se mantiene ...
+    // Maneja todos los clics del grid a través de delegación
+    handleGridClick(event) {
+        let cell = event.target;
 
-    addEventListeners() {
-        // ... (se mantiene igual) ...
-        this.shadowRoot.querySelectorAll('.cell').forEach(cell => {
-            if (!cell.classList.contains('header-cell')) {
-                cell.addEventListener('click', () => this.handleCellClick(cell));
-            }
-        });
+        // Subir en el árbol DOM si el clic fue en el texto (span) dentro de la celda
+        while (cell !== this.shadowRoot.getElementById('plannerGrid') && !cell.classList.contains('cell')) {
+            cell = cell.parentNode;
+        }
+
+        // Asegurarse de que el elemento clickeado sea una celda y no un encabezado
+        if (cell.classList.contains('cell') && !cell.classList.contains('header-cell')) {
+            console.log("Delegación de evento - Celda clickeada:", cell);
+            this.handleCellClickLogic(cell);
+        }
     }
 
-  // ... dentro de RoomPlanner class ...
+    // Lógica de click separada
+    // ... dentro de RoomPlanner class ...
 
-    handleCellClick(cell) {
+    // Lógica de click separada
+    handleCellClickLogic(cell) {
+        // Calcular la fecha exacta de la celda clickeada
+        const day = cell.dataset.day;
+        // Usamos this.currentYear y this.currentMonthIndex (0-indexed)
+        const clickedDate = new Date(this.currentYear, this.currentMonthIndex, day);
+        // Formatear a YYYY-MM-DD para compatibilidad con input type="date" y backend
+        const formattedDate = clickedDate.toISOString().split('T')[0]; 
+
+
         const roomId = cell.dataset.roomId;
-        // Encuentra los detalles completos de la habitación para pasar el nombre y precio
         const roomDetails = this.rooms.find(r => r.id == roomId);
 
-        const day = cell.dataset.day;
         const bookingId = cell.dataset.bookingId || null; 
         
         let bookingDetails = null;
@@ -247,8 +215,10 @@ class RoomPlanner extends HTMLElement {
             day, 
             bookingId, 
             bookingDetails,
-            roomName: roomDetails ? roomDetails.name : 'N/A', // Pasar nombre
-            roomPrice: roomDetails ? roomDetails.price : 0    // Pasar precio
+            roomName: roomDetails ? roomDetails.name : 'N/A',
+            roomPrice: roomDetails ? roomDetails.price : 0,
+            // *** CLAVE: Pasar la fecha clickeada ***
+            clickedDate: formattedDate 
         };
 
         const bookingModal = document.querySelector('booking-modal'); 
@@ -259,8 +229,5 @@ class RoomPlanner extends HTMLElement {
         }
     }
 }
-
-// ... fin de RoomPlanner class ...
-
 
 customElements.define('room-planner', RoomPlanner);
