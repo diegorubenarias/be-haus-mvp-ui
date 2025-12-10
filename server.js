@@ -17,7 +17,8 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
         console.log('Conectado a la base de datos SQLite.');
         db.run(`CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
+            name TEXT NOT NULL,
+            price REAL NOT NULL DEFAULT 0.0 -- NUEVO: Precio base por noche
         )`);
         db.run(`CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,6 +34,13 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL
         )`);
+         db.run(`CREATE TABLE IF NOT EXISTS consumptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            amount REAL NOT NULL, -- El importe del consumo
+            date TEXT NOT NULL
+        )`);
         seedDatabase(db);
     }
 });
@@ -41,9 +49,19 @@ function seedDatabase(db) {
     // Insertar habitaciones (existía antes, se mantiene)
     db.get("SELECT COUNT(*) as count FROM rooms", (err, row) => {
         if (row && row.count === 0) {
-            const rooms = ['101 Simple', '102 Doble', '103 Suite', '201 Simple', '202 Doble', '203 Doble Luxury', '301 Presidencial'];
-            rooms.forEach(name => db.run('INSERT INTO rooms (name) VALUES (?)', [name]));
-            console.log("Habitaciones iniciales insertadas.");
+             const rooms = [
+                ['101 Simple', 80.00], 
+                ['102 Doble', 120.00], 
+                ['103 Suite', 250.00], 
+                ['201 Simple', 85.00], 
+                ['202 Doble', 130.00], 
+                ['203 Doble Luxury', 180.00], 
+                ['301 Presidencial', 400.00]
+            ];
+            rooms.forEach(room => {
+                db.run('INSERT INTO rooms (name, price) VALUES (?, ?)', [room[0], room[1]]);
+            });
+            console.log("Habitaciones iniciales con precios insertadas.");
         }
     });
 
@@ -221,6 +239,34 @@ app.delete('/api/bookings/:id', authenticateMiddleware, (req, res) => {
         res.json({ message: "Reserva eliminada exitosamente", changes: this.changes });
     });
 });
+
+// ... dentro de server.js, en la sección de API REST ...
+
+// Endpoint para obtener consumos de una reserva específica
+app.get('/api/consumptions/:bookingId', authenticateMiddleware, (req, res) => {
+    const { bookingId } = req.params;
+    db.all("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, rows) => {
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        res.json({ data: rows });
+    });
+});
+
+// Endpoint para añadir un consumo
+app.post('/api/consumptions', authenticateMiddleware, (req, res) => {
+    const { booking_id, description, amount, date } = req.body;
+    const insert = 'INSERT INTO consumptions (booking_id, description, amount, date) VALUES (?,?,?,?)';
+    db.run(insert, [booking_id, description, amount, date], function (err) {
+        if (err) {
+            res.status(400).json({"error": err.message});
+            return;
+        }
+        res.status(201).json({ id: this.lastID, message: "Consumo agregado." });
+    });
+});
+
 
 
 // ----------------------------------------

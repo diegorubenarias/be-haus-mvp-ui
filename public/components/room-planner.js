@@ -226,28 +226,41 @@ class RoomPlanner extends HTMLElement {
         });
     }
 
+  // ... dentro de RoomPlanner class ...
+
     handleCellClick(cell) {
         const roomId = cell.dataset.roomId;
+        // Encuentra los detalles completos de la habitación para pasar el nombre y precio
+        const roomDetails = this.rooms.find(r => r.id == roomId);
+
         const day = cell.dataset.day;
         const bookingId = cell.dataset.bookingId || null; 
         
         let bookingDetails = null;
 
-        // Si existe un bookingId, busca los detalles completos para pasarlos al modal
         if (bookingId) {
-            bookingDetails = this.bookings.find(b => b.id == bookingId); // Usar == porque bookingId viene como string de dataset
+            bookingDetails = this.bookings.find(b => b.id == bookingId);
         }
         
-        const event = new CustomEvent('open-booking-modal', {
-            bubbles: true,
-            composed: true, 
-            // Pasa los detalles completos, incluyendo el ID de la reserva si existe
-            detail: { roomId, day, bookingId, bookingDetails } 
-        });
-        this.dispatchEvent(event);
+        const modalData = { 
+            roomId, 
+            day, 
+            bookingId, 
+            bookingDetails,
+            roomName: roomDetails ? roomDetails.name : 'N/A', // Pasar nombre
+            roomPrice: roomDetails ? roomDetails.price : 0    // Pasar precio
+        };
+
+        const bookingModal = document.querySelector('booking-modal'); 
+        if (bookingModal) {
+            bookingModal.openModal(modalData);
+        } else {
+            console.error("No se encontró el elemento <booking-modal> en el documento.");
+        }
     }
+}
+
 // ... fin de RoomPlanner class ...
 
-}
 
 customElements.define('room-planner', RoomPlanner);
