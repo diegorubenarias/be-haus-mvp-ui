@@ -288,7 +288,24 @@ app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
     });
 });
 
-
+// Endpoint para obtener una reserva específica por su ID (NUEVO)
+app.get('/api/bookings/:id', authenticateMiddleware, (req, res) => {
+    const { id } = req.params;
+    db.get("SELECT * FROM bookings WHERE id = ?", [id], (err, row) => {
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        if (row) {
+            res.json({
+                message: "success",
+                data: row // Devuelve un solo objeto de reserva, no un array
+            });
+        } else {
+            res.status(404).json({"error": "Reserva no encontrada."});
+        }
+    });
+});
 
 // Función auxiliar para finalizar la actualización de la reserva
 function finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res) {
