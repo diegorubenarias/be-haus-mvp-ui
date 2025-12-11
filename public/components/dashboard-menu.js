@@ -20,6 +20,7 @@ class DashboardMenu extends HTMLElement {
                     <li><a href="/profit-loss-report.html">Reporte Ganancias</a></li>
                     <li><a href="#">Stock/Minibar</a></li>
                     <li><a href="/employees.html">Empleados</a></li> 
+                    <li><a href="/shifts-planner.html">Planificador Turnos</a></li> 
                     <li><a href="/housekeeping.html">Limpieza</a></li>
                     <li><a href="/prices.html">Precios</a></li>
                      <li><a href="/invoices.html">Facturas</a></li> 

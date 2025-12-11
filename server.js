@@ -63,6 +63,10 @@ app.get('/employees.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'employees.html'));
 });
 
+app.get('/shifts-planner.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'shifts-planner.html'));
+});
+
 
 // ----------------------------------------
 app.use('/api', apiRoutes);
