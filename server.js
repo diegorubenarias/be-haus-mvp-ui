@@ -112,6 +112,10 @@ app.get('/housekeeping.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'housekeeping.html'));
 });
 
+app.get('/prices.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'prices.html'));
+});
+
 // ----------------------------------------
 
 // --- Rutas de API REST ---
@@ -335,6 +339,26 @@ app.put('/api/rooms/status/:roomId', authenticateMiddleware, (req, res) => {
     });
 });
 
+app.put('/api/rooms/:id/price', authenticateMiddleware, (req, res) => {
+    const { price } = req.body;
+    const { id } = req.params;
+
+    if (typeof price !== 'number' || price < 0) {
+        return res.status(400).json({ error: "El precio debe ser un número positivo." });
+    }
+
+    db.run('UPDATE rooms SET price = ? WHERE id = ?', [price, id], function (err) {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        if (this.changes > 0) {
+            res.status(200).json({ message: "Precio de habitación actualizado exitosamente.", changes: this.changes });
+        } else {
+            res.status(404).json({ error: "Habitación no encontrada." });
+        }
+    });
+});
 
 
 
