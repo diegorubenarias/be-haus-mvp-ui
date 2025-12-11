@@ -18,6 +18,7 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'standard',
             price REAL NOT NULL DEFAULT 0.0,
             -- NUEVO: Estado de limpieza (clean, dirty, servicing)
             clean_status TEXT NOT NULL DEFAULT 'clean' 
@@ -61,16 +62,33 @@ function seedDatabase(db) {
     db.get("SELECT COUNT(*) as count FROM rooms", (err, row) => {
         if (row && row.count === 0) {
              const rooms = [
-                ['101 Simple', 80.00], 
-                ['102 Doble', 120.00], 
-                ['103 Suite', 250.00], 
-                ['201 Simple', 85.00], 
-                ['202 Doble', 130.00], 
-                ['203 Doble Luxury', 180.00], 
-                ['301 Presidencial', 400.00]
+                ['BeH101', 'executive', 80.00], 
+                ['BeH103', 'executive', 120.00], 
+                ['BeH201', 'executive', 250.00], 
+                ['BeH203', 'executive', 85.00], 
+                ['BeH301', 'executive', 130.00], 
+                ['BeH303', 'executive', 180.00], 
+                ['BeH401', 'executive', 400.00],
+                ['BeH102', 'studio', 80.00], 
+                ['BeH104', 'studio', 120.00], 
+                ['BeH204', 'studio', 250.00], 
+                ['BeH202', 'studio', 85.00], 
+                ['BeH302', 'studio', 130.00], 
+                ['BeH304', 'studio', 180.00], 
+                ['BeH402', 'studio', 400.00],
+                ['BeH403', 'loft', 80.00], 
+                ['De6-5D', 'studio', 120.00], 
+                ['De6-6D', 'studio', 250.00], 
+                ['De6-6C', 'executive', 85.00], 
+                ['De6-7C', 'executive', 130.00], 
+                ['De6-7E', 'executive', 180.00], 
+                ['De6-11E', 'executive', 400.00],
+                ['De4-9D', 'executive', 80.00], 
+                ['De4-10D', 'executive', 120.00], 
+                ['Mi3-1B', 'family', 250.00] 
             ];
             rooms.forEach(room => {
-                db.run('INSERT INTO rooms (name, price) VALUES (?, ?)', [room[0], room[1]]);
+                db.run('INSERT INTO rooms (name, category, price) VALUES (?, ?, ?)', [room[0], room[1], room[2]]);
             });
             console.log("Habitaciones iniciales con precios insertadas.");
         }
@@ -127,6 +145,10 @@ app.get('/prices.html', authenticateMiddleware, (req, res) => {
 
 app.get('/invoices.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'invoices.html'));
+});
+
+app.get('/invoice-detail.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'invoice-detail.html'));
 });
 
 
@@ -265,6 +287,8 @@ app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
         }
     });
 });
+
+
 
 // Función auxiliar para finalizar la actualización de la reserva
 function finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res) {

@@ -47,7 +47,7 @@ class InvoiceListDashboard extends HTMLElement {
         }
     }
 
-    renderTable(invoices) {
+     renderTable(invoices) {
         const tbody = this.shadowRoot.getElementById('invoiceTableBody');
         tbody.innerHTML = '';
         invoices.forEach(invoice => {
@@ -57,20 +57,14 @@ class InvoiceListDashboard extends HTMLElement {
                 <td>${invoice.booking_id}</td>
                 <td>${invoice.issue_date}</td>
                 <td>$${invoice.total_amount.toFixed(2)}</td>
-                <td><a href="#" data-invoice-id="${invoice.id}" class="view-invoice">Ver/Imprimir</a></td>
+                <!-- ENLACE ACTUALIZADO -->
+                <td><a href="/invoice-detail.html?id=${invoice.id}" target="_blank">Ver/Imprimir</a></td>
             `;
             tbody.appendChild(tr);
         });
 
-        // Listener para ver detalles (implementaremos la vista detallada a continuación)
-        tbody.querySelectorAll('.view-invoice').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const invoiceId = e.target.dataset.invoiceId;
-                alert(`Falta implementar la vista detallada/impresión para la factura ID ${invoiceId}.`);
-                // window.location.href = `/invoice-detail.html?id=${invoiceId}`; // Esto sería el siguiente paso
-            });
-        });
+        // Eliminamos el listener de alerta anterior, el <a> ahora funciona nativamente
+        // tbody.querySelectorAll('.view-invoice').forEach(...) 
     }
 }
 
