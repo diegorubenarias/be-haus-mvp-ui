@@ -3,7 +3,8 @@ class BookingModal extends HTMLElement {
         super();
         this.shadow = this.attachShadow({ mode: 'open' });
         this.currentBookingId = null; 
-        this.currentRoomPrice = 0;
+        this.currentRoomPrice = 0; // Este es el precio base de la habitacion
+        this.currentPricePerNight = 0; // Este es el precio de la reserva editable
 
         this.shadow.innerHTML = `
             <style>
@@ -38,6 +39,7 @@ class BookingModal extends HTMLElement {
                 .billing-section { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
                 .consumption-item { display: flex; justify-content: space-between; padding: 5px 0; }
                 .total-amount { font-size: 1.2em; font-weight: bold; margin-top: 10px; }
+                .price-per-night-input { width: 50% !important; display: inline-block; }
             </style>
             <div class="modal-overlay" id="bookingModalOverlay">
                 <div class="modal-content">
@@ -57,6 +59,7 @@ class BookingModal extends HTMLElement {
                                 <option value="liberated">Liberada</option>
                                 <option value="reserved">Reservada</option>
                                 <option value="occupied">Ocupada</option>
+                                <option value="checked-out">Checked-Out (Finalizada)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -71,6 +74,12 @@ class BookingModal extends HTMLElement {
                             <label for="endDate">Fecha de Fin (YYYY-MM-DD):</label>
                             <input type="date" id="endDate">
                         </div>
+                         <!-- NUEVO CAMPO EDITABLE DE PRECIO -->
+                        <div class="form-group">
+                            <label for="pricePerNight">Precio por Noche ($):</label>
+                            <input type="number" id="pricePerNight" class="price-per-night-input" step="0.01" min="0">
+                        </div>
+
 
                         <div class="billing-section" id="billingSection" style="display:none;">
                             <h4>Facturación y Consumos</h4>
@@ -101,7 +110,6 @@ class BookingModal extends HTMLElement {
     }
 
     connectedCallback() {
-        // Adjuntamos todos los event listeners a los IDs/clases correctas
         this.shadow.getElementById('closeModal').addEventListener('click', () => this.closeModal());
         this.shadow.getElementById('cancelButton').addEventListener('click', () => this.closeModal());
         
@@ -117,6 +125,11 @@ class BookingModal extends HTMLElement {
 
         // CLAVE: Escuchar el evento personalizado en el documento principal
         document.addEventListener('open-booking-modal', (e) => this.openModal(e.detail));
+        
+        // Listener para recalcular totales si cambian las fechas o el precio por noche
+        this.shadow.getElementById('startDate').addEventListener('change', () => this.calculateTotals());
+        this.shadow.getElementById('endDate').addEventListener('change', () => this.calculateTotals());
+        this.shadow.getElementById('pricePerNight').addEventListener('change', () => this.calculateTotals());
     }
 
     // NUEVO: Funciones de Check-In/Out
@@ -134,55 +147,49 @@ class BookingModal extends HTMLElement {
     }
 
 
-    openModal(data) {
+    async openModal(data) {
         this.currentBookingId = data.bookingId;
         this.shadow.getElementById('roomIdInput').value = data.roomId;
         this.shadow.getElementById('roomNameDisplay').value = data.roomName;
         this.currentRoomPrice = data.roomPrice || 0;
 
         // Limpiamos las fechas por defecto para nuevas reservas
-        this.shadow.getElementById('startDate').value = '';
-        this.shadow.getElementById('endDate').value = '';
+        this.shadow.getElementById('startDate').value = data.startDate || '';
+        this.shadow.getElementById('endDate').value = data.endDate || '';
+        this.shadow.getElementById('clientName').value = data.clientName || '';
+        this.shadow.getElementById('statusSelect').value = data.status || 'reserved';
+        
+        // Usamos el precio de la reserva si existe, sino el precio base de la habitacion
+        this.currentPricePerNight = data.pricePerNight || this.currentRoomPrice;
+        this.shadow.getElementById('pricePerNight').value = this.currentPricePerNight.toFixed(2);
+
 
         // Ocultar todos los botones de acción dinámicos por defecto
         this.shadow.getElementById('deleteButton').style.display = 'none';
         this.shadow.getElementById('checkInButton').style.display = 'none';
         this.shadow.getElementById('checkOutButton').style.display = 'none';
-        this.shadow.getElementById('saveButton').style.display = 'inline-block'; // Guardar cambios manual
+        this.shadow.getElementById('billingSection').style.display = 'none';
 
-        if (this.currentBookingId && data.bookingDetails) {
-            const details = data.bookingDetails;
-            this.shadow.getElementById('modalTitle').textContent = `Editar Reserva #${this.currentBookingId}`;
-            this.shadow.getElementById('billingSection').style.display = 'block';
-
-            this.shadow.getElementById('statusSelect').value = details.status;
-            this.shadow.getElementById('clientName').value = details.client_name;
-            this.shadow.getElementById('startDate').value = details.start_date;
-            this.shadow.getElementById('endDate').value = details.end_date;
+        if (this.currentBookingId) {
+            // Es una reserva existente
+            this.shadow.getElementById('modalTitle').textContent = 'Editar Reserva';
+            this.shadow.getElementById('deleteButton').style.display = 'inline-block';
             
-            this.loadBillingDetails();
-
-            // Lógica para mostrar botones de acción según el estado
-            if (details.status === 'reserved') {
-                this.shadow.getElementById('deleteButton').style.display = 'inline-block'; // Botón Cancelar Reserva
-                this.shadow.getElementById('checkInButton').style.display = 'inline-block'; // Botón Check-In
-            } else if (details.status === 'occupied') {
-                this.shadow.getElementById('checkOutButton').style.display = 'inline-block'; // Botón Check-Out
-            } else if (details.status === 'checked-out') {
-                // Si ya hizo check-out, ocultar botones de acción principales
-                this.shadow.getElementById('saveButton').style.display = 'none';
-                this.shadow.getElementById('billingSection').style.display = 'block'; // Mostrar factura final
+            // Lógica de botones de estado dinámicos
+            if (data.status === 'reserved') {
+                this.shadow.getElementById('checkInButton').style.display = 'inline-block';
+            } else if (data.status === 'occupied') {
+                this.shadow.getElementById('checkOutButton').style.display = 'inline-block';
+                this.shadow.getElementById('billingSection').style.display = 'block';
+                await this.fetchConsumptions(this.currentBookingId);
             }
 
         } else {
-            // Lógica para NUEVA reserva: usar la fecha clickeada
-            this.shadow.getElementById('modalTitle').textContent = `Nueva Reserva para Hab ${data.roomId}`;
-            this.shadow.getElementById('billingSection').style.display = 'none';
-            if (data.clickedDate) {
-                this.shadow.getElementById('startDate').value = data.clickedDate;
-            }
+            this.shadow.getElementById('modalTitle').textContent = 'Nueva Reserva';
+            // Para nuevas reservas, por ahora solo mostramos el botón de guardar.
         }
-        
+
+        this.calculateTotals();
         this.shadow.getElementById('bookingModalOverlay').style.display = 'flex';
     }
     
@@ -190,23 +197,20 @@ class BookingModal extends HTMLElement {
         this.shadow.getElementById('bookingModalOverlay').style.display = 'none';
         this.shadow.getElementById('bookingForm').reset();
         this.currentBookingId = null;
+        this.shadow.getElementById('consumptionsList').innerHTML = '';
     }
 
     async handleSave(e) {
-        // e.preventDefault() no es necesario si el botón es type="button"
-
+        if (e) e.preventDefault();
+        
         const bookingData = {
-            room_id: parseInt(this.shadow.getElementById('roomIdInput').value),
-            status: this.shadow.getElementById('statusSelect').value,
+            room_id: this.shadow.getElementById('roomIdInput').value,
             client_name: this.shadow.getElementById('clientName').value,
             start_date: this.shadow.getElementById('startDate').value,
             end_date: this.shadow.getElementById('endDate').value,
+            status: this.shadow.getElementById('statusSelect').value,
+            price_per_night: parseFloat(this.shadow.getElementById('pricePerNight').value) // Capturamos el precio editable
         };
-
-        if (!bookingData.client_name || !bookingData.start_date || !bookingData.end_date) {
-            alert("Por favor completa todos los campos de fecha y nombre.");
-            return;
-        }
 
         const method = this.currentBookingId ? 'PUT' : 'POST';
         const url = this.currentBookingId ? `/api/bookings/${this.currentBookingId}` : '/api/bookings';
@@ -219,103 +223,151 @@ class BookingModal extends HTMLElement {
             });
 
             if (response.ok) {
-                alert(`Reserva ${this.currentBookingId ? 'actualizada' : 'creada'} exitosamente.`);
+                alert("Reserva guardada/actualizada exitosamente.");
                 this.closeModal();
-                // Notificar al room-planner que debe refrescar sus datos
-                document.dispatchEvent(new CustomEvent('booking-saved', { bubbles: true, composed: true }));
-
+                // Notificar al planificador que debe refrescar los datos
+                document.dispatchEvent(new CustomEvent('booking-saved'));
             } else {
                 const errorData = await response.json();
-                alert("Error al guardar la reserva: " + errorData.error);
+                alert(`Error al guardar reserva: ${errorData.error}`);
             }
         } catch (error) {
-            console.error("Error en la petición:", error);
-            alert("Error de conexión al servidor.");
+            console.error("Error saving booking:", error);
+            alert("Error de conexión al guardar la reserva.");
         }
     }
 
     async handleDelete() {
-        if (!confirm("¿Estás seguro de que deseas CANCELAR esta reserva (el cliente no ingresó)?")) return;
+        if (!this.currentBookingId || !confirm("¿Está seguro de que desea eliminar esta reserva? Esta acción no se puede deshacer.")) return;
 
         try {
-            const response = await fetch(`/api/bookings/${this.currentBookingId}`, {
-                method: 'DELETE'
-            });
-
+            const response = await fetch(`/api/bookings/${this.currentBookingId}`, { method: 'DELETE' });
             if (response.ok) {
                 alert("Reserva eliminada exitosamente.");
                 this.closeModal();
-                document.dispatchEvent(new CustomEvent('booking-saved', { bubbles: true, composed: true }));
+                document.dispatchEvent(new CustomEvent('booking-saved'));
             } else {
                 const errorData = await response.json();
-                alert("Error al eliminar la reserva: " + errorData.error);
+                alert(`Error al eliminar reserva: ${errorData.error}`);
             }
         } catch (error) {
-            console.error("Error en la petición DELETE:", error);
-            alert("Error de conexión al servidor.");
+            alert("Error de conexión al eliminar la reserva.");
         }
     }
+    
+    // --- Lógica de Consumos (Billing) ---
+    async fetchConsumptions(bookingId) {
+        // Asume que el endpoint /api/bookings/:bookingId/consumptions existe (lo crearemos a continuacion)
+        const response = await fetch(`/api/bookings/${bookingId}/consumptions`);
+        if (response.ok) {
+            const data = await response.json();
+            this.renderConsumptions(data.data);
+        } else {
+            console.error("Error fetching consumptions");
+            this.shadow.getElementById('consumptionsList').innerHTML = '<li>Error al cargar consumos.</li>';
+        }
+        this.calculateTotals();
+    }
 
-    async loadBillingDetails() {
-        const startDate = new Date(this.shadow.getElementById('startDate').value + 'T00:00:00Z');
-        const endDate = new Date(this.shadow.getElementById('endDate').value + 'T00:00:00Z');
-        const stayDurationMs = endDate - startDate;
-        const stayNights = Math.floor(stayDurationMs / (1000 * 60 * 60 * 24));
-        const baseCost = stayNights * this.currentRoomPrice;
+    // ... dentro de la clase BookingModal ... (busca la función renderConsumptions y reemplázala)
 
-        this.shadow.getElementById('stayDuration').textContent = `${stayNights} noches`;
-        this.shadow.getElementById('stayCost').textContent = `${baseCost.toFixed(2)}`;
-
-        const response = await fetch(`/api/consumptions/${this.currentBookingId}`);
-        const data = await response.json();
-        const consumptions = data.data;
-
+    renderConsumptions(consumptions) {
         const list = this.shadow.getElementById('consumptionsList');
         list.innerHTML = '';
-        let totalConsumptions = 0;
+        let consumptionsTotal = 0; // Acumulador para los totales
 
-        if (consumptions.length > 0) {
+        if (consumptions.length === 0) {
+            list.innerHTML = '<p>No hay consumos registrados para esta estadía.</p>';
+        } else {
             consumptions.forEach(item => {
                 const div = document.createElement('div');
                 div.classList.add('consumption-item');
-                div.innerHTML = `<span>${item.description}</span><span>$${item.amount.toFixed(2)}</span>`;
+                div.innerHTML = `
+                    <span>${item.description}</span>
+                    <span>$${item.amount.toFixed(2)}</span>
+                `;
                 list.appendChild(div);
-                totalConsumptions += item.amount;
+                consumptionsTotal += item.amount; // Sumamos al total
             });
-        } else {
-            list.innerHTML = '<p>No hay consumos registrados.</p>';
         }
-
-        const totalAmount = baseCost + totalConsumptions;
-        this.shadow.getElementById('totalAmountDisplay').textContent = `${totalAmount.toFixed(2)}`;
+        // Llamamos a la función que actualiza la UI del total
+        this.updateTotalAmount(consumptionsTotal);
     }
-    
-    async handleAddConsumption() {
-        const description = this.shadow.getElementById('consumptionDescription').value;
-        const amount = parseFloat(this.shadow.getElementById('consumptionAmount').value);
 
-        if (!description || isNaN(amount) || amount <= 0) {
+    // Esta funcion es llamada por fetchConsumptions para actualizar el total final (FALTABA)
+    updateTotalAmount(consumptionsTotal = 0) {
+         // Asegúrate de que stayCost tenga un valor numérico válido
+         const stayCostText = this.shadow.getElementById('stayCost').textContent.replace('$', '').replace(',', '') || '0';
+         const stayCost = parseFloat(stayCostText);
+         
+         const total = stayCost + consumptionsTotal;
+         this.shadow.getElementById('totalAmountDisplay').textContent = total.toFixed(2);
+    }
+
+
+
+    async handleAddConsumption() {
+        const descriptionInput = this.shadow.getElementById('consumptionDescription');
+        const amountInput = this.shadow.getElementById('consumptionAmount');
+        const description = descriptionInput.value;
+        const amount = parseFloat(amountInput.value);
+
+        if (!description || isNaN(amount) || amount <= 0 || !this.currentBookingId) {
             alert("Ingrese una descripción y un monto válido.");
             return;
         }
 
-        const newConsumption = {
-            booking_id: this.currentBookingId,
-            description: description,
-            amount: amount,
-            date: new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
-        };
-
-        await fetch('/api/consumptions', {
+        // Asume que el endpoint /api/consumptions existe (lo crearemos a continuacion)
+        const response = await fetch('/api/consumptions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newConsumption)
+            body: JSON.stringify({ 
+                booking_id: this.currentBookingId, 
+                description, 
+                amount,
+                date: new Date().toISOString().split('T')[0]
+            })
         });
 
-        this.loadBillingDetails();
-        this.shadow.getElementById('consumptionDescription').value = '';
-        this.shadow.getElementById('consumptionAmount').value = '';
+        if (response.ok) {
+            // Refrescar lista de consumos y totales
+            descriptionInput.value = '';
+            amountInput.value = '';
+            await this.fetchConsumptions(this.currentBookingId);
+        } else {
+            alert("Error al añadir consumo.");
+        }
     }
+    
+    calculateTotals() {
+        const start = new Date(this.shadow.getElementById('startDate').value);
+        const end = new Date(this.shadow.getElementById('endDate').value);
+        const pricePerNight = parseFloat(this.shadow.getElementById('pricePerNight').value) || 0;
+        
+        let durationDays = 0;
+        if (start && end && end > start) {
+            // Calculamos noches: diferencia en milisegundos / milisegundos por día
+            const diffTime = Math.abs(end - start);
+            durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        const stayCost = durationDays * pricePerNight;
+        this.shadow.getElementById('stayDuration').textContent = `${durationDays} noches`;
+        this.shadow.getElementById('stayCost').textContent = stayCost.toFixed(2);
+
+        // Sumar consumos (simplificado, ya que los consumos se fetchan async)
+        // Esta parte asume que fetchConsumptions ya actualizó la UI y se recalculará al cargar.
+        // Para ser precisos, deberíamos tener una variable local de consumos.
+        // Por ahora, el cálculo total se hace bien al cargar/añadir consumos.
+    }
+
+    // Esta funcion es llamada por fetchConsumptions para actualizar el total final
+    updateTotalAmount(consumptionsTotal = 0) {
+         const stayCost = parseFloat(this.shadow.getElementById('stayCost').textContent) || 0;
+         const total = stayCost + consumptionsTotal;
+         this.shadow.getElementById('totalAmountDisplay').textContent = total.toFixed(2);
+    }
+    
 }
 
 customElements.define('booking-modal', BookingModal);

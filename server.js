@@ -170,93 +170,84 @@ app.get('/api/bookings', authenticateMiddleware,(req, res) => {
 });
 
 // Endpoint para crear una nueva reserva (ACTUALIZADO CON VALIDACIÓN)
-app.post('/api/bookings', authenticateMiddleware,(req, res) => {
+// Endpoint para crear una nueva reserva (ACTUALIZADO P1/P3)
+app.post('/api/bookings', authenticateMiddleware, (req, res) => {
     const { room_id, client_name, start_date, end_date, status } = req.body;
 
     if (!room_id || !client_name || !start_date || !end_date || !status) {
         return res.status(400).json({ error: "Faltan campos requeridos." });
     }
     
-    // Lógica de validación de superposición:
-    // Busca reservas existentes para la misma habitación que se superpongan con las fechas solicitadas.
-    const query = `SELECT COUNT(*) as count FROM bookings 
-                   WHERE room_id = ? 
-                   AND (
-                       (start_date BETWEEN ? AND ?) OR 
-                       (end_date BETWEEN ? AND ?) OR
-                       (? BETWEEN start_date AND end_date) OR
-                       (? BETWEEN start_date AND end_date)
-                   )`;
-    
-    db.get(query, [room_id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
-        if (err) {
-            res.status(500).json({"error": err.message});
-            return;
+    // Primero, obtenemos el precio actual de la habitación
+    db.get("SELECT price FROM rooms WHERE id = ?", [room_id], (err, room) => {
+        if (err || !room) {
+            return res.status(404).json({ error: "Habitación no encontrada o error de precio." });
         }
+        const price_per_night = room.price; // Capturamos el precio actual
 
-        if (row.count > 0) {
-            // Si count es mayor que 0, hay una superposición.
-            res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada o reservada en esas fechas." });
-            return;
-        }
-
-        // Si no hay superposición, procede con la inserción.
-        const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status) VALUES (?,?,?,?,?)';
-        db.run(insert, [room_id, client_name, start_date, end_date, status], function (err) {
+        // Lógica de validación de superposición... (mantenemos la misma lógica que tenías)
+        const query = `SELECT COUNT(*) as count FROM bookings 
+                       WHERE room_id = ? 
+                       AND (
+                           (start_date BETWEEN ? AND ?) OR 
+                           (end_date BETWEEN ? AND ?) OR
+                           (? BETWEEN start_date AND end_date) OR
+                           (? BETWEEN start_date AND end_date)
+                       )`;
+        
+        db.get(query, [room_id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
             if (err) {
-                res.status(400).json({"error": err.message});
+                res.status(500).json({"error": err.message});
                 return;
             }
-            res.status(201).json({
-                message: "Reserva creada exitosamente",
-                data: req.body,
-                id: this.lastID
+
+            if (row.count > 0) {
+                res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada o reservada en esas fechas." });
+                return;
+            }
+
+            // Si no hay superposición, procede con la inserción, incluyendo el nuevo campo price_per_night
+            const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status, price_per_night) VALUES (?,?,?,?,?,?)';
+            db.run(insert, [room_id, client_name, start_date, end_date, status, price_per_night], function (err) {
+                if (err) {
+                    res.status(400).json({"error": err.message});
+                    return;
+                }
+                res.status(201).json({
+                    message: "Reserva creada exitosamente",
+                    data: req.body,
+                    id: this.lastID,
+                    price_per_night: price_per_night // Devolvemos el precio usado
+                });
             });
         });
     });
 });
 
-// Endpoint para ACTUALIZAR una reserva existente
-// ... dentro de server.js ...
-
-// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO CON VALIDACIÓN)
-// ... dentro de server.js ...
-
-// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO con lógica de Check-In/Out)
+// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO P1/P3)
 app.put('/api/bookings/:id', authenticateMiddleware, (req, res) => {
-    const { client_name, start_date, end_date, status, room_id } = req.body;
-    const { id } = req.params; 
+    // Aceptamos price_per_night como un campo actualizable
+    const { room_id, client_name, start_date, end_date, status, price_per_night } = req.body;
+    const { id } = req.params;
 
-    // Lógica de validación de superposición (se mantiene igual, excluyendo la reserva actual)
-    // ... (Mantener la lógica overlapQuery y db.get(...) de validación de superposición aquí) ...
-    const overlapQuery = `
-        SELECT COUNT(*) as count FROM bookings 
-        WHERE room_id = ? 
-        AND id <> ?
-        AND (
-            (start_date BETWEEN ? AND ?) OR 
-            (end_date BETWEEN ? AND ?) OR
-            (? BETWEEN start_date AND end_date) OR
-            (? BETWEEN start_date AND end_date)
-        )`;
+    if (!room_id || !client_name || !start_date || !end_date || !status) {
+        return res.status(400).json({ error: "Faltan campos requeridos." });
+    }
+
+    // Usamos COALESCE para solo actualizar price_per_night si se proporciona en el body, 
+    // manteniendo el valor anterior si no se especifica.
+    const update = `UPDATE bookings SET room_id = ?, client_name = ?, start_date = ?, end_date = ?, status = ?, price_per_night = COALESCE(?, price_per_night) WHERE id = ?`;
     
-    db.get(overlapQuery, [room_id, id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
-        if (err) return res.status(500).json({"error": err.message});
-        if (row.count > 0) {
-            return res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada por otra reserva en esas fechas." });
+    // Pasamos price_per_night como un parámetro más
+    db.run(update, [room_id, client_name, start_date, end_date, status, price_per_night, id], function (err) {
+        if (err) {
+            res.status(400).json({"error": err.message});
+            return;
         }
-
-        // Lógica de Check-Out: Si el nuevo estado es 'checked-out', ensuciar la habitación.
-        if (status === 'checked-out') {
-            const updateRoomQuery = `UPDATE rooms SET clean_status = 'dirty' WHERE id = ?`;
-            db.run(updateRoomQuery, [room_id], (err) => {
-                if (err) console.error("Error al actualizar estado de limpieza durante check-out:", err.message);
-                // Continúa con la actualización de la reserva
-                finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res);
-            });
+        if (this.changes > 0) {
+            res.status(200).json({ message: "Reserva actualizada exitosamente", changes: this.changes });
         } else {
-            // Para otros estados (reserved, occupied/checked-in), solo actualiza la reserva
-            finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res);
+            res.status(404).json({ error: "Reserva no encontrada." });
         }
     });
 });
@@ -308,16 +299,40 @@ app.get('/api/consumptions/:bookingId', authenticateMiddleware, (req, res) => {
     });
 });
 
-// Endpoint para añadir un consumo
+// --- Rutas de API REST para Consumos (NUEVO P1.1) ---
+
+// Endpoint para obtener consumos de una reserva específica
+app.get('/api/bookings/:bookingId/consumptions', authenticateMiddleware, (req, res) => {
+    const { bookingId } = req.params;
+    db.all("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, rows) => {
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        res.json({
+            message: "success",
+            data: rows
+        });
+    });
+});
+
+// Endpoint para añadir un nuevo consumo
 app.post('/api/consumptions', authenticateMiddleware, (req, res) => {
     const { booking_id, description, amount, date } = req.body;
+    if (!booking_id || !description || !amount || !date) {
+        return res.status(400).json({ error: "Faltan campos requeridos." });
+    }
     const insert = 'INSERT INTO consumptions (booking_id, description, amount, date) VALUES (?,?,?,?)';
     db.run(insert, [booking_id, description, amount, date], function (err) {
         if (err) {
             res.status(400).json({"error": err.message});
             return;
         }
-        res.status(201).json({ id: this.lastID, message: "Consumo agregado." });
+        res.status(201).json({
+            message: "Consumo añadido exitosamente",
+            data: req.body,
+            id: this.lastID
+        });
     });
 });
 

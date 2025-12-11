@@ -127,8 +127,9 @@ class RoomPlanner extends HTMLElement {
         }
     }
     
-    findBookingForDay(roomId, day) {
+     findBookingForDay(roomId, day) {
         const targetDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
+        // Devolvemos el objeto de reserva COMPLETO
         return this.bookings.find(b => {
             const start = new Date(b.start_date + 'T00:00:00Z'); const end = new Date(b.end_date + 'T00:00:00Z');
             return b.room_id == roomId && targetDate >= start && targetDate < end; 
@@ -148,26 +149,39 @@ class RoomPlanner extends HTMLElement {
     }
 
     // Lógica de click separada que EMITE UN EVENTO
-    handleCellClickLogic(cell) {
+       // ... dentro de RoomPlanner class, reemplaza handleCellClickLogic ...
+
+    // Lógica de click separada que EMITE UN EVENTO
+     handleCellClickLogic(cell) {
         const day = cell.dataset.day;
-        const clickedDate = new Date(this.currentYear, this.currentMonthIndex, day);
-        const formattedDate = clickedDate.toISOString().split('T'); 
+        const clickedDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
+        const formattedDate = clickedDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
         const roomId = cell.dataset.roomId;
         const roomDetails = this.rooms.find(r => r.id == roomId);
-        const bookingId = cell.dataset.bookingId || null; let bookingDetails = null;
-        if (bookingId) { bookingDetails = this.bookings.find(b => b.id == bookingId); }
-        
-        const modalData = { 
-            roomId, day, bookingId, bookingDetails,
-            roomName: roomDetails ? roomDetails.name : 'N/A',
+
+        // Si existe un bookingId en la celda, buscamos la reserva completa para pasar sus datos
+        const existingBooking = cell.dataset.bookingId ? this.bookings.find(b => b.id == cell.dataset.bookingId) : null;
+
+        const eventDetail = {
+            roomId: roomId,
+            roomName: roomDetails ? roomDetails.name : `Habitación ${roomId}`,
             roomPrice: roomDetails ? roomDetails.price : 0,
-            clickedDate: formattedDate 
+            
+            // Usamos los datos de la reserva existente o valores por defecto
+            startDate: existingBooking ? existingBooking.start_date : formattedDate,
+            endDate: existingBooking ? existingBooking.end_date : '',
+            clientName: existingBooking ? existingBooking.client_name : '',
+            status: existingBooking ? existingBooking.status : 'reserved',
+            pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price,
+
+            bookingId: cell.dataset.bookingId || null
         };
 
-        // Emitir el evento con bubbles: true y composed: true
-        const event = new CustomEvent('open-booking-modal', { bubbles: true, composed: true, detail: modalData });
-        this.dispatchEvent(event);
+        document.dispatchEvent(new CustomEvent('open-booking-modal', {
+            detail: eventDetail
+        }));
     }
-}
-
+} 
+// Asegúrate de que customElements.define('room-planner', RoomPlanner); esté al final del archivo si no lo estaba
 customElements.define('room-planner', RoomPlanner);
+
