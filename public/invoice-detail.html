@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factura Detallada</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Componente para mostrar la factura -->
+    <script src="components/invoice-detail-view.js" defer></script>
+    <style>
+        /* Estilos específicos para impresión */
+        @media print {
+            body {
+                background-color: #fff;
+                color: #000;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .invoice-page {
+                width: 100%;
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+        body {
+            /* Centramos la vista previa en pantalla */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <!-- El componente cargará los datos basado en el ID de la URL -->
+    <invoice-detail-view></invoice-detail-view>
+</body>
+</html>
