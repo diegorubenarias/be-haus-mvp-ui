@@ -48,8 +48,16 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            role TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'Operador',
             monthly_salary REAL NOT NULL
+        );`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS shifts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id INTEGER NOT NULL,
+            shift_date TEXT NOT NULL, -- Formato YYYY-MM-DD
+            shift_type TEXT NOT NULL, -- Ej: 'Mañana', 'Tarde', 'Noche', 'Soporte', 'Franco'
+            FOREIGN KEY(employee_id) REFERENCES employees(id)
         );`);
 
         db.run(`CREATE TABLE IF NOT EXISTS expenses (

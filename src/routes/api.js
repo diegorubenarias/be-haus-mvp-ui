@@ -344,6 +344,56 @@ router.get('/employees', (req, res) => {
         res.json({ data: rows });
     });
 });
+router.post('/employees', (req, res) => {
+    const { name, role, monthly_salary } = req.body;
+    if (!name || !role || !monthly_salary) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
+    db.run('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', [name, role, monthly_salary], function (err) {
+        if (err) { res.status(400).json({ error: err.message }); return; }
+        res.status(201).json({ message: "Empleado añadido.", id: this.lastID });
+    });
+});
+
+router.put('/employees/:id', (req, res) => {
+    const { name, role, monthly_salary } = req.body;
+    db.run('UPDATE employees SET name = ?, role = ?, monthly_salary = ? WHERE id = ?', [name, role, monthly_salary, req.params.id], function (err) {
+        if (err) { res.status(400).json({ error: err.message }); return; }
+        res.status(200).json({ message: "Empleado actualizado.", changes: this.changes });
+    });
+});
+
+router.delete('/employees/:id', (req, res) => {
+    db.run('DELETE FROM employees WHERE id = ?', req.params.id, function (err) {
+        if (err) { res.status(400).json({ error: err.message }); return; }
+        res.status(200).json({ message: "Empleado eliminado.", changes: this.changes });
+    });
+});
+
+// Obtener turnos para un mes específico (ej: ?year=2023&month=10)
+router.get('/shifts', (req, res) => {
+    const { year, month } = req.query; 
+    if (!year || !month) { return res.status(400).json({ error: "Se requieren año y mes." }); }
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`; // Simplificado para el mes
+
+    db.all("SELECT * FROM shifts WHERE shift_date BETWEEN ? AND ?", [startDate, endDate], (err, rows) => {
+        if (err) { res.status(500).json({ error: err.message }); return; }
+        res.json({ data: rows });
+    });
+});
+
+
+// Planificar o actualizar un turno (POST para simplificar, idempotente)
+router.post('/shifts', (req, res) => {
+    const { employee_id, shift_date, shift_type } = req.body;
+    if (!employee_id || !shift_date || !shift_type) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
+    
+    // Usamos INSERT OR REPLACE para que si el turno ya existe para esa fecha/empleado, se actualice
+    const query = `INSERT OR REPLACE INTO shifts (employee_id, shift_date, shift_type) VALUES (?, ?, ?)`;
+    db.run(query, [employee_id, shift_date, shift_type], function (err) {
+        if (err) { res.status(400).json({ error: err.message }); return; }
+        res.status(201).json({ message: "Turno guardado.", id: this.lastID });
+    });
+});
 
 // Puedes añadir endpoints POST, PUT, DELETE para empleados si lo necesitas más adelante (CRUD completo)
 // Pero por ahora GET es suficiente para el reporte.

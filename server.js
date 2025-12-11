@@ -59,6 +59,9 @@ app.get('/profit-loss-report.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'profit-loss-report.html'));
 });
 
+app.get('/employees.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'employees.html'));
+});
 
 
 // ----------------------------------------
