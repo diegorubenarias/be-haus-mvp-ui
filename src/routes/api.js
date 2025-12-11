@@ -336,5 +336,40 @@ router.get('/invoices', (req, res) => {
     });
 });
 
+/**** GASTOS */
+// --- Endpoints de Empleados (Employees) (P7) ---
+router.get('/employees', (req, res) => {
+    db.all("SELECT * FROM employees", [], (err, rows) => {
+        if (err) { res.status(500).json({ error: err.message }); return; }
+        res.json({ data: rows });
+    });
+});
+
+// Puedes añadir endpoints POST, PUT, DELETE para empleados si lo necesitas más adelante (CRUD completo)
+// Pero por ahora GET es suficiente para el reporte.
+
+
+// --- Endpoints de Gastos (Expenses) (P7) ---
+router.get('/expenses', (req, res) => {
+    // Retornamos todos los gastos por ahora
+    db.all("SELECT * FROM expenses ORDER BY date DESC", [], (err, rows) => {
+        if (err) { res.status(500).json({ error: err.message }); return; }
+        res.json({ data: rows });
+    });
+});
+
+router.post('/expenses', (req, res) => {
+    const { description, amount, date, category } = req.body;
+    if (!description || !amount || !date || !category) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
+    const insert = 'INSERT INTO expenses (description, amount, date, category) VALUES (?, ?, ?, ?)';
+    db.run(insert, [description, amount, date, category], function (err) {
+        if (err) { res.status(400).json({ error: err.message }); return; }
+        res.status(201).json({ message: "Gasto añadido exitosamente", id: this.lastID });
+    });
+});
+
+// Puedes añadir endpoints PUT/DELETE para gastos si lo necesitas más adelante.
+
+
 
 module.exports = router;

@@ -51,8 +51,9 @@ app.get('/invoice-detail.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'invoice-detail.html'));
 });
 
-
-
+app.get('/expenses.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'expenses.html'));
+});
 
 
 

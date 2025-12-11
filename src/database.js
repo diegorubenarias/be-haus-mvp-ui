@@ -44,6 +44,22 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             details TEXT, -- Un campo JSON o texto para guardar los detalles de la línea (estadia y consumos)
             FOREIGN KEY(booking_id) REFERENCES bookings(id)
         );`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            monthly_salary REAL NOT NULL
+        );`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            amount REAL NOT NULL,
+            date TEXT NOT NULL,
+            category TEXT NOT NULL -- Ej: 'Servicios', 'Impuestos', 'Limpieza', 'Minibar'
+        );
+        `);
         seedDatabase(db);
     }
 });
@@ -91,6 +107,14 @@ function seedDatabase(db) {
             // NOTA: En producción usarías hashing (ej: bcrypt). Para este MVP, texto plano está bien.
             db.run('INSERT INTO users (username, password) VALUES (?, ?)', ['admin', '1234']);
             console.log("Usuario inicial 'admin'/'1234' insertado.");
+        }
+    });
+
+     db.get("SELECT COUNT(*) as count FROM employees", (err, row) => {
+        if (row && row.count === 0) {
+            db.run('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', ['Juan Perez', 'Gerente', 8000.00]);
+            db.run('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', ['Maria Garcia', 'Recepcionista', 4500.00]);
+            console.log("Empleados iniciales insertados.");
         }
     });
 }
