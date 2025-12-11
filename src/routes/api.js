@@ -368,8 +368,60 @@ router.post('/expenses', (req, res) => {
     });
 });
 
-// Puedes añadir endpoints PUT/DELETE para gastos si lo necesitas más adelante.
+// --- Endpoint de Reporte de Ganancias Mensual (P7) ---
+router.get('/reports/profit-loss', (req, res) => {
+    const { year, month } = req.query; // Esperamos year=YYYY, month=MM (ej: 01 para enero)
 
+    if (!year || !month) {
+        return res.status(400).json({ error: "Se requieren los parámetros 'year' y 'month'." });
+    }
+
+    // SQLite usa formato TEXT YYYY-MM-DD. Filtramos por rango de fechas.
+    const startDate = `${year}-${month}-01`;
+    // Calcular el último día del mes (un poco complejo en SQL puro, más fácil en JS)
+    const lastDay = new Date(year, month, 0).getDate(); 
+    const endDate = `${year}-${month}-${lastDay}`;
+    
+    const responseData = {
+        period: `${year}-${month}`,
+        invoicesTotal: 0,
+        expensesTotal: 0,
+        salariesTotal: 0,
+        profit: 0
+    };
+
+    // 1. Calcular Ingresos (Total Facturado en el mes)
+    const invoicesQuery = `SELECT SUM(total_amount) as total FROM invoices WHERE issue_date BETWEEN ? AND ?`;
+    db.get(invoicesQuery, [startDate, endDate], (err, row) => {
+        if (err) return res.status(500).json({ error: "en invoice query" });
+        responseData.invoicesTotal = row.total || 0;
+
+        // 2. Calcular Gastos Operativos (en el mes)
+        const expensesQuery = `SELECT SUM(amount) as total FROM expenses WHERE date BETWEEN ? AND ?`;
+        db.get(expensesQuery, [startDate, endDate], (err, row) => {
+            if (err) return res.status(500).json({ error: "en expenses query" });
+            responseData.expensesTotal = row.total || 0;
+
+            // 3. Calcular Sueldos (Asumimos que todos los empleados cobran cada mes, independientemente de la fecha de gasto)
+            const salariesQuery = `SELECT SUM(monthly_salary) as total FROM employees`;
+            db.get(salariesQuery, (err, row) => { 
+                if (err) { 
+                    console.error(err); 
+                    return res.status(500).json({ error: "Error 500 en consulta de Sueldos: " + err.message });
+                }
+                // CLAVE: Nos aseguramos de manejar 'row' aunque 'total' sea null/undefined (si no hay empleados)
+                responseData.salariesTotal = (row && row.total) || 0; 
+                
+                // 4. Calcular Ganancia
+                const totalCosts = responseData.expensesTotal + responseData.salariesTotal;
+                responseData.profit = responseData.invoicesTotal - totalCosts;
+
+                // Devolver el reporte completo
+                res.json(responseData);
+            });
+        });
+    });
+});
 
 
 module.exports = router;

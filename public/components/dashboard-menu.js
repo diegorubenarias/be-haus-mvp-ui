@@ -16,7 +16,8 @@ class DashboardMenu extends HTMLElement {
                 <ul>
                     <li><a href="/dashboard">Dashboard</a></li>
                     <li><a href="/planner.html">Ocupación/Reservas</a></li>
-                    <li><a href="/reports.html">Reportes</a></li>
+                    <li><a href="/reports.html">Reporte Ocupacion</a></li>
+                    <li><a href="/profit-loss-report.html">Reporte Ganancias</a></li>
                     <li><a href="#">Stock/Minibar</a></li>
                     <li><a href="/housekeeping.html">Limpieza</a></li>
                     <li><a href="/prices.html">Precios</a></li>

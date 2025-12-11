@@ -95,7 +95,7 @@ function seedDatabase(db) {
                 ['Mi3-1B', 'family', 250.00] 
             ];
             rooms.forEach(room => {
-                db.run('INSERT INTO rooms (name, category, price) VALUES (?, ?, ?)', [room[0], room[1], room[2]]);
+                db.run('INSERT INTO rooms (name, category, price) VALUES (?, ?, ?)', room);
             });
             console.log("Habitaciones iniciales con precios insertadas.");
         }
