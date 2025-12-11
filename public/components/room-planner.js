@@ -127,12 +127,18 @@ class RoomPlanner extends HTMLElement {
         }
     }
     
-     findBookingForDay(roomId, day) {
+     // ... dentro de RoomPlanner class ...
+
+    findBookingForDay(roomId, day) {
         const targetDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
-        // Devolvemos el objeto de reserva COMPLETO
         return this.bookings.find(b => {
-            const start = new Date(b.start_date + 'T00:00:00Z'); const end = new Date(b.end_date + 'T00:00:00Z');
-            return b.room_id == roomId && targetDate >= start && targetDate < end; 
+            const start = new Date(b.start_date + 'T00:00:00Z'); 
+            const end = new Date(b.end_date + 'T00:00:00Z');
+            
+            // Solo devolvemos la reserva si está activa (occupied o reserved)
+            const isActive = (b.status === 'occupied' || b.status === 'reserved');
+
+            return b.room_id == roomId && targetDate >= start && targetDate < end && isActive; 
         });
     }
 
@@ -152,35 +158,41 @@ class RoomPlanner extends HTMLElement {
        // ... dentro de RoomPlanner class, reemplaza handleCellClickLogic ...
 
     // Lógica de click separada que EMITE UN EVENTO
-     handleCellClickLogic(cell) {
+     // ... dentro de RoomPlanner class ...
+
+    // Lógica de click separada que EMITE UN EVENTO
+    handleCellClickLogic(cell) {
         const day = cell.dataset.day;
         const clickedDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
         const formattedDate = clickedDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
         const roomId = cell.dataset.roomId;
         const roomDetails = this.rooms.find(r => r.id == roomId);
 
-        // Si existe un bookingId en la celda, buscamos la reserva completa para pasar sus datos
-        const existingBooking = cell.dataset.bookingId ? this.bookings.find(b => b.id == cell.dataset.bookingId) : null;
+        // Si findBookingForDay devuelve null, 'existingBooking' será null, indicando NUEVA reserva.
+        const existingBooking = this.findBookingForDay(roomId, day);
 
         const eventDetail = {
             roomId: roomId,
             roomName: roomDetails ? roomDetails.name : `Habitación ${roomId}`,
             roomPrice: roomDetails ? roomDetails.price : 0,
             
-            // Usamos los datos de la reserva existente o valores por defecto
+            // Usamos los datos de la reserva existente o valores por defecto para NUEVA RESERVA
             startDate: existingBooking ? existingBooking.start_date : formattedDate,
-            endDate: existingBooking ? existingBooking.end_date : '',
+            // Para una nueva reserva, la fecha de fin la dejamos vacía para que el usuario la elija
+            endDate: existingBooking ? existingBooking.end_date : '', 
             clientName: existingBooking ? existingBooking.client_name : '',
-            status: existingBooking ? existingBooking.status : 'reserved',
+            status: existingBooking ? existingBooking.status : 'reserved', // Nueva reserva por defecto es 'reserved'
             pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price,
 
-            bookingId: cell.dataset.bookingId || null
+            bookingId: existingBooking ? existingBooking.id : null // null para nueva reserva
         };
 
         document.dispatchEvent(new CustomEvent('open-booking-modal', {
             detail: eventDetail
         }));
     }
+// ...
+
 } 
 // Asegúrate de que customElements.define('room-planner', RoomPlanner); esté al final del archivo si no lo estaba
 customElements.define('room-planner', RoomPlanner);

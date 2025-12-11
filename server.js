@@ -20,7 +20,7 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             name TEXT NOT NULL,
             price REAL NOT NULL DEFAULT 0.0,
             -- NUEVO: Estado de limpieza (clean, dirty, servicing)
-            clean_status TEXT NOT NULL DEFAULT 'dirty' 
+            clean_status TEXT NOT NULL DEFAULT 'clean' 
         )`);
         db.run(`CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +43,15 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             amount REAL NOT NULL, -- El importe del consumo
             date TEXT NOT NULL
         )`);
+        db.run(`CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL UNIQUE, -- Una factura por reserva
+            invoice_number TEXT NOT NULL UNIQUE, -- Número de factura único (ej. A0001-000001)
+            issue_date TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            details TEXT, -- Un campo JSON o texto para guardar los detalles de la línea (estadia y consumos)
+            FOREIGN KEY(booking_id) REFERENCES bookings(id)
+        );`);
         seedDatabase(db);
     }
 });
@@ -115,6 +124,11 @@ app.get('/housekeeping.html', authenticateMiddleware, (req, res) => {
 app.get('/prices.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'prices.html'));
 });
+
+app.get('/invoices.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'invoices.html'));
+});
+
 
 // ----------------------------------------
 
@@ -375,6 +389,87 @@ app.put('/api/rooms/:id/price', authenticateMiddleware, (req, res) => {
     });
 });
 
+// Endpoint para GENERAR una factura a partir de una reserva (NUEVO P1.1)
+app.post('/api/invoices/generate/:bookingId', authenticateMiddleware, (req, res) => {
+    const { bookingId } = req.params;
+
+    // 1. Necesitamos OBTENER todos los datos: reserva, consumos, precio/noche
+    db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], (err, booking) => {
+        if (err || !booking) {
+            return res.status(404).json({ error: "Reserva no encontrada." });
+        }
+
+        db.all("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, consumptions) => {
+            if (err) {
+                return res.status(500).json({ error: "Error al obtener consumos." });
+            }
+
+            // Validar que el check-out ya se realizó antes de facturar (opcional, pero buena práctica)
+            if (booking.status !== 'checked-out') {
+                return res.status(400).json({ error: "No se puede facturar una reserva que no ha completado el check-out." });
+            }
+
+            // 2. Calcular el total (la lógica ya la tenemos en el frontend, aquí la replicamos en backend por seguridad/integridad)
+            const startDate = new Date(booking.start_date + 'T00:00:00Z');
+            const endDate = new Date(booking.end_date + 'T00:00:00Z');
+            const durationDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+            const stayCost = durationDays * booking.price_per_night;
+            const consumptionsTotal = consumptions.reduce((sum, item) => sum + item.amount, 0);
+            const totalAmount = stayCost + consumptionsTotal;
+
+            // Preparamos detalles para guardar como JSON en la factura
+            const invoiceDetails = JSON.stringify({
+                stay: { description: `Estadía ${durationDays} noches`, amount: stayCost },
+                consumptions: consumptions.map(c => ({ description: c.description, amount: c.amount }))
+            });
+
+            // 3. Generar un número de factura simple para MVP (ej: INV-YYYYMMDD-BOOKINGID)
+            const issueDate = new Date().toISOString().split('T')[0];
+            const invoiceNumber = `INV-${issueDate.replace(/-/g, '')}-${bookingId}`;
+
+            // 4. Insertar la factura
+            const insert = 'INSERT INTO invoices (booking_id, invoice_number, issue_date, total_amount, details) VALUES (?, ?, ?, ?, ?)';
+            db.run(insert, [bookingId, invoiceNumber, issueDate, totalAmount, invoiceDetails], function (err) {
+                if (err) {
+                    // Esto puede ocurrir si intentan facturar la misma reserva dos veces (UNIQUE constraint)
+                    return res.status(409).json({ error: "La reserva ya tiene una factura generada.", invoiceId: this.lastID });
+                }
+                res.status(201).json({
+                    message: "Factura generada exitosamente",
+                    invoiceId: this.lastID,
+                    invoiceNumber: invoiceNumber,
+                    totalAmount: totalAmount
+                });
+            });
+        });
+    });
+});
+
+// Endpoint para obtener una factura específica por su ID (NUEVO P1.1)
+app.get('/api/invoices/:id', authenticateMiddleware, (req, res) => {
+    const { id } = req.params;
+    db.get("SELECT * FROM invoices WHERE id = ?", [id], (err, invoice) => {
+        if (err || !invoice) {
+            res.status(404).json({ error: "Factura no encontrada." });
+            return;
+        }
+        // Parseamos los detalles JSON antes de enviarlos al frontend
+        invoice.details = JSON.parse(invoice.details);
+        res.json(invoice);
+    });
+});
+
+// Endpoint para listar TODAS las facturas (NUEVO P1.1)
+app.get('/api/invoices', authenticateMiddleware, (req, res) => {
+    // Para el listado general, no necesitamos los 'details' completos, solo un resumen
+    db.all("SELECT id, booking_id, invoice_number, issue_date, total_amount FROM invoices ORDER BY issue_date DESC", [], (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json({ data: rows });
+    });
+});
 
 
 // ----------------------------------------
