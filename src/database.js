@@ -20,7 +20,6 @@ pool.connect(err => {
 
 async function setupDatabase() {
     try {
-        await pool.query(`drop table rooms`);
         await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
