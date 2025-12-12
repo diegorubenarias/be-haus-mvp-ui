@@ -1,38 +1,72 @@
-body {
-    font-family: sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
+/* public/styles.css */
+
+/* --- Reseteo Básico y Variables Globales --- */
+/* Definimos la paleta de colores centralizada */
+:root {
+    --primary-color: #0056b3; /* Azul Hotelero (Botones, encabezados) */
+    --secondary-color: #ff9800; /* Naranja de Acento (Bordes, highlights) */
+    --background-color: #f4f7f9; /* Fondo claro y suave (Limpiador que #f4f4f4) */
+    --card-bg: white;
+    --text-color: #333;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Sombra suave para profundidad */
 }
 
-.center-container {
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    /* Usamos una pila de fuentes moderna y legible */
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+/* --- Layout Principal de la Aplicación (Mantenemos tu estructura) --- */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.center-container { /* Usado principalmente para la página de login */
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
 }
 
-.app-container {
-    display: flex;
-    min-height: 100vh;
-}
-
 .main-content {
     flex-grow: 1;
     padding: 20px;
+    /* Ajuste clave: Asumimos que el menú lateral es fijo y mide 220px */
+   // margin-left: 220px; 
 }
 
 header {
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 10px;
+    /* Estilo de tarjeta flotante para el header, más moderno que un simple borde */
+    background: var(--card-bg);
+    padding: 20px;
     margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
+
+h1 {
+    color: var(--primary-color);
+    font-size: 1.8em;
+}
+
 /* Estilos para componentes web que crearemos a continuacion */
-.card {
-    background: white;
+.card { /* Clase genérica para contenedores que no usan Shadow DOM */
+    background: var(--card-bg);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow);
     margin-bottom: 20px;
 }
