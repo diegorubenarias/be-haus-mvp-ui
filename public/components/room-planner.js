@@ -22,6 +22,11 @@ class RoomPlanner extends HTMLElement {
                 .status-occupied { background-color: #4caf50; color: white; }
                 .status-blocked { background-color: #f44336; color: white; }
                 .status-liberated { background-color: white; }
+                 /* --- NUEVOS ESTILOS PARA EL ESTADO DE LIMPIEZA --- */
+                .clean-status-header.clean { border-left: 5px solid #4CAF50; /* Verde */ }
+                .clean-status-header.dirty { border-left: 5px solid #F44336; /* Rojo - SUCIA */ }
+                .clean-status-header.servicing { border-left: 5px solid #FF9800; /* Naranja */ }
+
                 .month-selector { padding: 10px; background-color: #e9e9e9; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
                 .nav-button { background: #0056b3; color: white; border: none; padding: 5px 10px; cursor: pointer; }
             </style>
@@ -80,10 +85,13 @@ class RoomPlanner extends HTMLElement {
 
     renderGrid() {
         const grid = this.shadowRoot.getElementById('plannerGrid');
+        // Limpiamos el grid antes de renderizar
         grid.innerHTML = ''; 
-        // Ajuste dinámico de columnas
+        
+        // Ajuste dinámico de columnas (asume this.daysInMonth ya calculado)
         this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${this.daysInMonth}, 40px)`;
 
+        // Preparamos las clases de fin de semana para las celdas de días
         let dayOfWeek = new Date(this.currentYear, this.currentMonthIndex, 1).getDay();
         const dayClasses = [];
         for (let i = 0; i < this.daysInMonth; i++) {
@@ -91,7 +99,7 @@ class RoomPlanner extends HTMLElement {
             dayOfWeek = (dayOfWeek + 1) % 7; 
         }
 
-        // Encabezados de días
+        // --- Encabezados de Días (Fila 1) ---
         grid.innerHTML += `<div class="cell header-cell room-header">Habitación</div>`; 
         for (let i = 1; i <= this.daysInMonth; i++) {
             const headerCell = document.createElement('div');
@@ -100,33 +108,43 @@ class RoomPlanner extends HTMLElement {
             headerCell.textContent = i;
             grid.appendChild(headerCell);
         }
-        
-        // --- Bucle de renderizado de celdas ---
+      // --- Bucle de renderizado de celdas por habitación (Filas 2+) ---
         if (this.rooms && this.rooms.length > 0) {
             this.rooms.forEach(room => {
-                grid.innerHTML += `<div class="cell room-header" data-room-id="${room.id}">${room.name}</div>`;
                 
+                // 1. Renderizar la celda de la cabecera de la habitación (sticky left)
+                const roomHeaderCell = document.createElement('div');
+                roomHeaderCell.classList.add('cell', 'room-header', 'clean-status-header', room.clean_status); // APLICAMOS EL ESTADO DE LIMPIEZA AQUI
+                roomHeaderCell.dataset.roomId = room.id;
+                roomHeaderCell.textContent = room.name;
+                grid.appendChild(roomHeaderCell);
+
+                // 2. Bucle interno para los días del mes
                 for (let i = 1; i <= this.daysInMonth; i++) {
                     const cell = document.createElement('div');
                     cell.classList.add('cell', 'status-liberated');
-                    cell.dataset.roomId = room.id; cell.dataset.day = i;
+                    cell.dataset.roomId = room.id; 
+                    cell.dataset.day = i;
                     
                     if (dayClasses[i - 1] === 'weekend-cell') { cell.classList.add('weekend-cell'); }
 
                     const booking = this.findBookingForDay(room.id, i);
                     if (booking) {
-                        cell.classList.remove('status-liberated'); cell.classList.add(`status-${booking.status}`);
-                        if(dayClasses[i - 1] === 'weekend-cell' && booking.status !== 'liberated') { cell.classList.remove('weekend-cell'); }
-                        cell.textContent = `${booking.client_name.split(' ')} (${booking.status.charAt(0).toUpperCase()})`;
+                        cell.classList.remove('status-liberated'); 
+                        cell.classList.add(`status-${booking.status}`);
+                          // Aseguramos que la celda ocupada no tome el color de fondo del fin de semana
+                        if(dayClasses[i - 1] === 'weekend-cell' && booking.status !== 'liberated') { 
+                            cell.classList.remove('weekend-cell'); 
+                        }
+                        cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`;
                         cell.dataset.bookingId = booking.id;
                     }
-                    // Sin listeners individuales (usamos delegación)
+                    // Usamos delegación de eventos, no listeners individuales aquí.
                     grid.appendChild(cell);
                 }
             });
         }
     }
-    
      // ... dentro de RoomPlanner class ...
 
     findBookingForDay(roomId, day) {
