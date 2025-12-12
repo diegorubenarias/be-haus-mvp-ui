@@ -299,11 +299,21 @@ router.post('/invoices/generate/:bookingId', (req, res) => {
                     // Esto puede ocurrir si intentan facturar la misma reserva dos veces (UNIQUE constraint)
                     return res.status(409).json({ error: "La reserva ya tiene una factura generada.", invoiceId: this.lastID });
                 }
-                res.status(201).json({
-                    message: "Factura generada exitosamente",
-                    invoiceId: this.lastID,
-                    invoiceNumber: invoiceNumber,
-                    totalAmount: totalAmount
+                 // Cuando la factura se genera exitosamente, actualizamos el estado de la habitación a 'dirty'
+                db.run('UPDATE rooms SET clean_status = ? WHERE id = ?', ['dirty', booking.room_id], (updateErr) => {
+                    if (updateErr) {
+                        console.error("Advertencia: No se pudo actualizar el estado de limpieza de la habitación:", updateErr.message);
+                        // No es un error crítico para la facturación, solo lo logeamos.
+                    }
+                    
+                    // Respuesta final exitosa, incluyendo el nuevo estado de limpieza
+                    res.status(201).json({
+                        message: "Factura generada y habitación marcada como sucia.",
+                        invoiceId: this.lastID,
+                        invoiceNumber: invoiceNumber,
+                        totalAmount: totalAmount,
+                        roomStatusUpdatedTo: 'dirty'
+                    });
                 });
             });
         });

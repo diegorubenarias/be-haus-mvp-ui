@@ -135,7 +135,7 @@ class BookingModal extends HTMLElement {
     // NUEVO: Funciones de Check-In/Out
     handleCheckIn() {
         this.shadow.getElementById('statusSelect').value = 'occupied';
-        this.handleSave(); 
+        this.handleSave();
     }
 // ... dentro de la clase BookingModal ...
 
