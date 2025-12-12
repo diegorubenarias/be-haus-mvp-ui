@@ -41,8 +41,8 @@ async function setupDatabase() {
             id SERIAL PRIMARY KEY,
             room_id INTEGER NOT NULL,
             client_name TEXT NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
             status TEXT NOT NULL,
             price_per_night REAL NOT NULL
         )`);
@@ -57,13 +57,13 @@ async function setupDatabase() {
             booking_id INTEGER NOT NULL,
             description TEXT NOT NULL,
             amount REAL NOT NULL, -- El importe del consumo
-            date TEXT NOT NULL
+            date DATE NOT NULL
         )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS invoices (
             id SERIAL PRIMARY KEY,
             booking_id INTEGER NOT NULL UNIQUE, -- Una factura por reserva
             invoice_number TEXT NOT NULL UNIQUE, -- Número de factura único (ej. A0001-000001)
-            issue_date TEXT NOT NULL,
+            issue_date DATE NOT NULL,
             total_amount REAL NOT NULL,
             details TEXT, -- Un campo JSON o texto para guardar los detalles de la línea (estadia y consumos)
             payment_method TEXT NOT NULL DEFAULT 'Contado', 
@@ -80,16 +80,17 @@ async function setupDatabase() {
         await pool.query(`CREATE TABLE IF NOT EXISTS shifts (
             id SERIAL PRIMARY KEY,
             employee_id INTEGER NOT NULL,
-            shift_date TEXT NOT NULL, -- Formato YYYY-MM-DD
+            shift_date DATE NOT NULL, -- Formato YYYY-MM-DD
             shift_type TEXT NOT NULL, -- Ej: 'Mañana', 'Tarde', 'Noche', 'Soporte', 'Franco'
-            FOREIGN KEY(employee_id) REFERENCES employees(id)
+            FOREIGN KEY(employee_id) REFERENCES employees(id),
+            UNIQUE (employee_id, shift_date)
         );`);
 
         await pool.query(`CREATE TABLE IF NOT EXISTS expenses (
             id SERIAL PRIMARY KEY,
             description TEXT NOT NULL,
             amount REAL NOT NULL,
-            date TEXT NOT NULL,
+            date DATE NOT NULL,
             category TEXT NOT NULL -- Ej: 'Servicios', 'Impuestos', 'Limpieza', 'Minibar'
         );
         `);
