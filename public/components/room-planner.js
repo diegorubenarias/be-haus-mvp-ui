@@ -192,7 +192,7 @@ class RoomPlanner extends HTMLElement {
         const eventDetail = {
             roomId: roomId,
             roomName: roomDetails ? roomDetails.name : `Habitación ${roomId}`,
-            roomPrice: roomDetails ? roomDetails.price_per_night : 0,
+            roomPrice: roomDetails ? roomDetails.price : 0,
             
             // Usamos los datos de la reserva existente o valores por defecto para NUEVA RESERVA
             startDate: existingBooking ? existingBooking.start_date : formattedDate,
@@ -200,7 +200,7 @@ class RoomPlanner extends HTMLElement {
             endDate: existingBooking ? existingBooking.end_date : '', 
             clientName: existingBooking ? existingBooking.client_name : '',
             status: existingBooking ? existingBooking.status : 'reserved', // Nueva reserva por defecto es 'reserved'
-            pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price_per_night,
+            pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price,
 
             bookingId: existingBooking ? existingBooking.id : null // null para nueva reserva
         };

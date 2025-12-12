@@ -20,11 +20,20 @@ pool.connect(err => {
 
 async function setupDatabase() {
     try {
+        await pool.query(`drop table if exists invoices`);
+        await pool.query(`drop table if exists consumptions`);
+        await pool.query(`drop table if exists bookings`);
+        await pool.query(`drop table if exists rooms`);
+        await pool.query(`drop table if exists users`);
+        await pool.query(`drop table if exists shifts`);
+        await pool.query(`drop table if exists employees`);
+        await pool.query(`drop table if exists expenses`);  
+        
         await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'standard',
-            price_per_night REAL NOT NULL DEFAULT 0.0,
+            price REAL NOT NULL DEFAULT 0.0,
             -- NUEVO: Estado de limpieza (clean, dirty, servicing)
             clean_status TEXT NOT NULL DEFAULT 'clean' 
         )`);
@@ -92,7 +101,7 @@ async function setupDatabase() {
         }
         const roomCount = await pool.query('SELECT COUNT(*) AS count FROM rooms');
         if (roomCount.rows[0].count == 0) {
-            const insertRoomText = 'INSERT INTO rooms (name, category, price_per_night, clean_status) VALUES ($1, $2, $3, $4)';
+            const insertRoomText = 'INSERT INTO rooms (name, category, price, clean_status) VALUES ($1, $2, $3, $4)';
              const rooms = [
                 ['BeH101', 'executive', 80.00, 'clean'], 
                 ['BeH103', 'executive', 120.00, 'clean'], 
