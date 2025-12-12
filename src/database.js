@@ -90,7 +90,6 @@ async function setupDatabase() {
             await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', ['admin', hashedPassword]);
             console.log("Usuario inicial 'admin' insertado.");
         }
-        await pool.query('drop table if exists rooms');
         const roomCount = await pool.query('SELECT COUNT(*) AS count FROM rooms');
         if (roomCount.rows[0].count == 0) {
             const insertRoomText = 'INSERT INTO rooms (name, category, price_per_night, clean_status) VALUES ($1, $2, $3, $4)';
