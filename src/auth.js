@@ -1,5 +1,5 @@
 // src/auth.js
-const db = require('./database');
+const pool = require('./database'); 
 const bcrypt = require('bcrypt');
 
 // Middleware de Autenticación
@@ -17,7 +17,7 @@ function handleLogin(req, res) {
     const { username, password } = req.body;
     
     // 1. Buscamos el usuario por nombre
-    db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+    pool.query("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;

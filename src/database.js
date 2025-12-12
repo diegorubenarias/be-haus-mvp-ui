@@ -1,14 +1,26 @@
-const bcrypt = require('bcrypt'); // Importamos bcrypt
-const saltRounds = 10; // Nivel de seguridad para el hash
-const sqlite3 = require('sqlite3').verbose();
+require('dotenv').config(); // Carga variables de entorno localmente
+const { Pool } = require('pg'); // Importa el cliente de Postgres
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
-// --- Configuración de la Base de Datos ---
-const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
+// Configuración de la base de datos usando variables de entorno de Railway
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
+
+pool.connect(err => {
     if (err) {
-        console.error('Error al abrir la base de datos', err.message);
+        console.error('Error connecting to the database', err.stack);
     } else {
-        console.log('Conectado a la base de datos SQLite.');
-        db.run(`CREATE TABLE IF NOT EXISTS rooms (
+        console.log('Conectado a la base de datos PostgreSQL.');
+        setupDatabase();
+    }
+});
+
+async function setupDatabase() {
+    try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'standard',
@@ -16,7 +28,7 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             -- NUEVO: Estado de limpieza (clean, dirty, servicing)
             clean_status TEXT NOT NULL DEFAULT 'clean' 
         )`);
-        db.run(`CREATE TABLE IF NOT EXISTS bookings (
+        await pool.query(`CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             room_id INTEGER NOT NULL,
             client_name TEXT NOT NULL,
@@ -25,19 +37,19 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             status TEXT NOT NULL
         )`);
         // NUEVO: Tabla de usuarios
-        db.run(`CREATE TABLE IF NOT EXISTS users (
+        await pool.query(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL
         )`);
-         db.run(`CREATE TABLE IF NOT EXISTS consumptions (
+         await pool.query(`CREATE TABLE IF NOT EXISTS consumptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             booking_id INTEGER NOT NULL,
             description TEXT NOT NULL,
             amount REAL NOT NULL, -- El importe del consumo
             date TEXT NOT NULL
         )`);
-        db.run(`CREATE TABLE IF NOT EXISTS invoices (
+        await pool.query(`CREATE TABLE IF NOT EXISTS invoices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             booking_id INTEGER NOT NULL UNIQUE, -- Una factura por reserva
             invoice_number TEXT NOT NULL UNIQUE, -- Número de factura único (ej. A0001-000001)
@@ -48,14 +60,14 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             FOREIGN KEY(booking_id) REFERENCES bookings(id)
         );`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS employees (
+        await pool.query(`CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'Operador',
             monthly_salary REAL NOT NULL
         );`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS shifts (
+        await pool.query(`CREATE TABLE IF NOT EXISTS shifts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
             shift_date TEXT NOT NULL, -- Formato YYYY-MM-DD
@@ -63,7 +75,7 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             FOREIGN KEY(employee_id) REFERENCES employees(id)
         );`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS expenses (
+        await pool.query(`CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             description TEXT NOT NULL,
             amount REAL NOT NULL,
@@ -71,14 +83,17 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             category TEXT NOT NULL -- Ej: 'Servicios', 'Impuestos', 'Limpieza', 'Minibar'
         );
         `);
-        seedDatabase(db);
-    }
-});
+        
+        const userCount = await pool.query('SELECT COUNT(*) AS count FROM users');
+        if (userCount.rows[0].count == 0) {
+            const hashedPassword = bcrypt.hashSync('1234', saltRounds);
+            await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', ['admin', hashedPassword]);
+            console.log("Usuario inicial 'admin' insertado.");
+        }
 
-function seedDatabase(db) {
-    // Insertar habitaciones (existía antes, se mantiene)
-    db.get("SELECT COUNT(*) as count FROM rooms", (err, row) => {
-        if (row && row.count === 0) {
+        const roomCount = await pool.query('SELECT COUNT(*) AS count FROM rooms');
+        if (roomCount.rows[0].count == 0) {
+            const insertRoomText = 'INSERT INTO rooms (name, category, price, clean_status) VALUES ($1, $2, $3, $4)';
              const rooms = [
                 ['BeH101', 'executive', 80.00], 
                 ['BeH103', 'executive', 120.00], 
@@ -105,33 +120,18 @@ function seedDatabase(db) {
                 ['De4-10D', 'executive', 120.00], 
                 ['Mi3-1B', 'family', 250.00] 
             ];
-            rooms.forEach(room => {
-                db.run('INSERT INTO rooms (name, category, price) VALUES (?, ?, ?)', room);
-            });
-            console.log("Habitaciones iniciales con precios insertadas.");
+            for (const room of rooms) {
+                await pool.query(insertRoomText, room);
+            }
+            console.log("Habitaciones iniciales insertadas.");
         }
-    });
 
-    // NUEVO: Insertar usuario inicial
-    db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-        if (row && row.count === 0) {
-             const passwordTextoPlano = '1234';
-            // Generamos el hash de forma síncrona para simplificar el script de inicialización
-            const hashedPassword = bcrypt.hashSync(passwordTextoPlano, saltRounds);
+        console.log('Base de datos configurada correctamente.');
+    } catch (err) { 
 
-            // NOTA: En producción usarías hashing (ej: bcrypt). Para este MVP, texto plano está bien.
-            db.run('INSERT INTO users (username, password) VALUES (?, ?)', ['admin',hashedPassword]);
-            console.log("Usuario inicial 'admin'/'1234' insertado.");
-        }
-    });
-
-     db.get("SELECT COUNT(*) as count FROM employees", (err, row) => {
-        if (row && row.count === 0) {
-            db.run('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', ['Juan Perez', 'Gerente', 8000.00]);
-            db.run('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', ['Maria Garcia', 'Recepcionista', 4500.00]);
-            console.log("Empleados iniciales insertados.");
-        }
-    });
+        console.error('Error setting up the database', err);
+    }
 }
 
-module.exports = db;
+
+module.exports = pool;
