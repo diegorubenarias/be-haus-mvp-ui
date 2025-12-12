@@ -74,7 +74,7 @@ router.post('/bookings', (req, res) => {
             }
 
             // Si no hay superposición, procede con la inserción
-            const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status, price) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id'; // Usamos $ y RETURNING ID
+            const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status, price_per_night) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id'; // Usamos $ y RETURNING ID
             pool.query(insert, [room_id, client_name, start_date, end_date, status, price_per_night], (err, insertResult) => { // Usamos result
                 if (err) {
                     res.status(400).json({"error": err.message});

@@ -43,7 +43,8 @@ async function setupDatabase() {
             client_name TEXT NOT NULL,
             start_date TEXT NOT NULL,
             end_date TEXT NOT NULL,
-            status TEXT NOT NULL
+            status TEXT NOT NULL,
+            price_per_night REAL NOT NULL
         )`);
         // NUEVO: Tabla de usuarios
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
