@@ -93,7 +93,7 @@ async function setupDatabase() {
 
         const roomCount = await pool.query('SELECT COUNT(*) AS count FROM rooms');
         if (roomCount.rows[0].count == 0) {
-            const insertRoomText = 'INSERT INTO rooms (name, category, price, clean_status) VALUES ($1, $2, $3, $4)';
+            const insertRoomText = 'INSERT INTO rooms (name, category, price_per_night, clean_status) VALUES ($1, $2, $3, $4)';
              const rooms = [
                 ['BeH101', 'executive', 80.00, 'clean'], 
                 ['BeH103', 'executive', 120.00, 'clean'], 
