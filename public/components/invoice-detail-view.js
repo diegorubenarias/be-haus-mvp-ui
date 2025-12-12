@@ -62,7 +62,7 @@ class InvoiceDetailView extends HTMLElement {
                     <button class="print-button" onclick="window.close()">Cerrar Vista</button>
                 </div>
                 <div class="invoice-header">
-                    <h2>Hotel MVP S.A.</h2>
+                    <h2>BeHaus.</h2>
                     <p>Dirección: Calle Falsa 123, CABA</p>
                     <p>CUIT: 30-12345678-9</p>
                 </div>
@@ -119,7 +119,7 @@ class InvoiceDetailView extends HTMLElement {
                 </div>
 
                 <div class="invoice-footer">
-                    <p>Gracias por su estadía en Hotel MVP.</p>
+                    <p>Gracias por su estadía en BeHaus.</p>
                 </div>
             </div>
         `;

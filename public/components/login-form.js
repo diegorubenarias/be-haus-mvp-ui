@@ -78,7 +78,7 @@ class LoginForm extends HTMLElement {
                 }
             </style>
             <div class="login-card">
-                <h2>🏨 Hotel Admin</h2>
+                <h2>BeHaus</h2>
                 <div class="error-message" id="errorMessage"></div>
                 <form id="loginForm">
                     <input type="text" id="username" placeholder="Usuario (admin)" required>
