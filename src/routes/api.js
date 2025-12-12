@@ -45,11 +45,11 @@ router.post('/bookings', (req, res) => {
     }
     
     // Primero, obtenemos el precio actual de la habitación
-    pool.query("SELECT price FROM rooms WHERE id = $1", [room_id], (err, result) => { // Usamos $1
+    pool.query("SELECT price_per_night FROM rooms WHERE id = $1", [room_id], (err, result) => { // Usamos $1
         if (err || result.rows.length === 0) { // Verificamos result.rows.length
             return res.status(404).json({ error: "Habitación no encontrada o error de precio." });
         }
-        const price_per_night = result.rows[0].price; // Accedemos a result.rows[0].price
+        const price_per_night = result.rows[0].price_per_night; // Accedemos a result.rows[0].price
 
         // Lógica de validación de superposición...
         const query = `SELECT COUNT(*) as count FROM bookings 
