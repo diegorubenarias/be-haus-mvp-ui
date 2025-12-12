@@ -28,7 +28,7 @@ async function setupDatabase() {
         await pool.query(`drop table if exists shifts`);
         await pool.query(`drop table if exists employees`);
         await pool.query(`drop table if exists expenses`);  
-        
+
         await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
