@@ -21,7 +21,7 @@ pool.connect(err => {
 async function setupDatabase() {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'standard',
             price REAL NOT NULL DEFAULT 0.0,
@@ -29,7 +29,7 @@ async function setupDatabase() {
             clean_status TEXT NOT NULL DEFAULT 'clean' 
         )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             room_id INTEGER NOT NULL,
             client_name TEXT NOT NULL,
             start_date TEXT NOT NULL,
@@ -38,19 +38,19 @@ async function setupDatabase() {
         )`);
         // NUEVO: Tabla de usuarios
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL
         )`);
          await pool.query(`CREATE TABLE IF NOT EXISTS consumptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             booking_id INTEGER NOT NULL,
             description TEXT NOT NULL,
             amount REAL NOT NULL, -- El importe del consumo
             date TEXT NOT NULL
         )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             booking_id INTEGER NOT NULL UNIQUE, -- Una factura por reserva
             invoice_number TEXT NOT NULL UNIQUE, -- Número de factura único (ej. A0001-000001)
             issue_date TEXT NOT NULL,
@@ -61,14 +61,14 @@ async function setupDatabase() {
         );`);
 
         await pool.query(`CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'Operador',
             monthly_salary REAL NOT NULL
         );`);
 
         await pool.query(`CREATE TABLE IF NOT EXISTS shifts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             employee_id INTEGER NOT NULL,
             shift_date TEXT NOT NULL, -- Formato YYYY-MM-DD
             shift_type TEXT NOT NULL, -- Ej: 'Mañana', 'Tarde', 'Noche', 'Soporte', 'Franco'
@@ -76,7 +76,7 @@ async function setupDatabase() {
         );`);
 
         await pool.query(`CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             description TEXT NOT NULL,
             amount REAL NOT NULL,
             date TEXT NOT NULL,
@@ -95,30 +95,30 @@ async function setupDatabase() {
         if (roomCount.rows[0].count == 0) {
             const insertRoomText = 'INSERT INTO rooms (name, category, price, clean_status) VALUES ($1, $2, $3, $4)';
              const rooms = [
-                ['BeH101', 'executive', 80.00], 
-                ['BeH103', 'executive', 120.00], 
-                ['BeH201', 'executive', 250.00], 
-                ['BeH203', 'executive', 85.00], 
-                ['BeH301', 'executive', 130.00], 
-                ['BeH303', 'executive', 180.00], 
-                ['BeH401', 'executive', 400.00],
-                ['BeH102', 'studio', 80.00], 
-                ['BeH104', 'studio', 120.00], 
-                ['BeH204', 'studio', 250.00], 
-                ['BeH202', 'studio', 85.00], 
-                ['BeH302', 'studio', 130.00], 
-                ['BeH304', 'studio', 180.00], 
-                ['BeH402', 'studio', 400.00],
-                ['BeH403', 'loft', 80.00], 
-                ['De6-5D', 'studio', 120.00], 
-                ['De6-6D', 'studio', 250.00], 
-                ['De6-6C', 'executive', 85.00], 
-                ['De6-7C', 'executive', 130.00], 
-                ['De6-7E', 'executive', 180.00], 
-                ['De6-11E', 'executive', 400.00],
-                ['De4-9D', 'executive', 80.00], 
-                ['De4-10D', 'executive', 120.00], 
-                ['Mi3-1B', 'family', 250.00] 
+                ['BeH101', 'executive', 80.00, 'clean'], 
+                ['BeH103', 'executive', 120.00, 'clean'], 
+                ['BeH201', 'executive', 250.00, 'clean'], 
+                ['BeH203', 'executive', 85.00, 'clean'], 
+                ['BeH301', 'executive', 130.00, 'clean'], 
+                ['BeH303', 'executive', 180.00, 'clean'], 
+                ['BeH401', 'executive', 400.00, 'clean'],
+                ['BeH102', 'studio', 80.00, 'clean'], 
+                ['BeH104', 'studio', 120.00, 'clean'], 
+                ['BeH204', 'studio', 250.00, 'clean'], 
+                ['BeH202', 'studio', 85.00, 'clean'], 
+                ['BeH302', 'studio', 130.00, 'clean'], 
+                ['BeH304', 'studio', 180.00, 'clean'], 
+                ['BeH402', 'studio', 400.00, 'clean'],
+                ['BeH403', 'loft', 80.00, 'clean'], 
+                ['De6-5D', 'studio', 120.00, 'clean'], 
+                ['De6-6D', 'studio', 250.00, 'clean'], 
+                ['De6-6C', 'executive', 85.00, 'clean'], 
+                ['De6-7C', 'executive', 130.00, 'clean'], 
+                ['De6-7E', 'executive', 180.00, 'clean'], 
+                ['De6-11E', 'executive', 400.00, 'clean'],
+                ['De4-9D', 'executive', 80.00, 'clean'], 
+                ['De4-10D', 'executive', 120.00, 'clean'], 
+                ['Mi3-1B', 'family', 250.00, 'clean'] 
             ];
             for (const room of rooms) {
                 await pool.query(insertRoomText, room);

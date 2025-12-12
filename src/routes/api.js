@@ -1,44 +1,42 @@
 // src/routes/api.js
 const express = require('express');
 const router = express.Router();
-const pool = require('../database'); 
+const pool = require('../database'); // Usamos 'pool' de pg
 const { authenticateMiddleware } = require('../auth');
 const bcrypt = require('bcrypt');
-const saltRounds = 10; // Mismo nivel de seguridad que en database.js
+const saltRounds = 10; 
 
 // Aplicamos el middleware de autenticación a todas las rutas de este router por defecto
 router.use(authenticateMiddleware);
 
-
-// Endpoints de habitaciones y reservas (sin cambios por ahora)
 // Endpoint para obtener todas las habitaciones
 router.get('/rooms', (req, res) => {
-    pool.query("SELECT * FROM rooms", [], (err, rows) => {
+    pool.query("SELECT * FROM rooms", (err, result) => { // Eliminamos [] extra, usamos result
         if (err) {
             res.status(400).json({"error":err.message});
             return;
         }
         res.json({
             message: "success",
-            data: rows
-        });
-    });
-});
-router.get('/bookings',(req, res) => {
-    pool.query("SELECT * FROM bookings", [], (err, rows) => {
-        if (err) {
-            res.status(400).json({"error":err.message});
-            return;
-        }
-        res.json({
-            message: "success",
-            data: rows
+            data: result.rows // Postgres usa result.rows
         });
     });
 });
 
-// Endpoint para crear una nueva reserva (ACTUALIZADO CON VALIDACIÓN)
-// Endpoint para crear una nueva reserva (ACTUALIZADO P1/P3)
+router.get('/bookings',(req, res) => {
+    pool.query("SELECT * FROM bookings", (err, result) => { // Eliminamos [] extra, usamos result
+        if (err) {
+            res.status(400).json({"error":err.message});
+            return;
+        }
+        res.json({
+            message: "success",
+            data: result.rows // Postgres usa result.rows
+        });
+    });
+});
+
+// Endpoint para crear una nueva reserva (ACTUALIZADO para Postgres)
 router.post('/bookings', (req, res) => {
     const { room_id, client_name, start_date, end_date, status } = req.body;
 
@@ -47,36 +45,37 @@ router.post('/bookings', (req, res) => {
     }
     
     // Primero, obtenemos el precio actual de la habitación
-    pool.query("SELECT price FROM rooms WHERE id = ?", [room_id], (err, room) => {
-        if (err || !room) {
+    pool.query("SELECT price FROM rooms WHERE id = $1", [room_id], (err, result) => { // Usamos $1
+        if (err || result.rows.length === 0) { // Verificamos result.rows.length
             return res.status(404).json({ error: "Habitación no encontrada o error de precio." });
         }
-        const price_per_night = room.price; // Capturamos el precio actual
+        const price_per_night = result.rows[0].price; // Accedemos a result.rows[0].price
 
-        // Lógica de validación de superposición... (mantenemos la misma lógica que tenías)
+        // Lógica de validación de superposición...
         const query = `SELECT COUNT(*) as count FROM bookings 
-                       WHERE room_id = ? 
+                       WHERE room_id = $1 
                        AND (
-                           (start_date BETWEEN ? AND ?) OR 
-                           (end_date BETWEEN ? AND ?) OR
-                           (? BETWEEN start_date AND end_date) OR
-                           (? BETWEEN start_date AND end_date)
+                           (start_date BETWEEN $2 AND $3) OR 
+                           (end_date BETWEEN $2 AND $3) OR
+                           ($2 BETWEEN start_date AND end_date) OR
+                           ($3 BETWEEN start_date AND end_date)
                        )`;
         
-        pool.query(query, [room_id, start_date, end_date, start_date, end_date, start_date, end_date], (err, row) => {
+        pool.query(query, [room_id, start_date, end_date], (err, resultOverlap) => { // Usamos $1, $2, $3 y otro nombre de resultado
             if (err) {
                 res.status(500).json({"error": err.message});
                 return;
             }
 
-            if (row.count > 0) {
+            // resultOverlap.rows[0].count es un string en pg, lo parseamos o comparamos como string
+            if (parseInt(resultOverlap.rows[0].count) > 0) {
                 res.status(409).json({ error: "Conflicto de reserva: La habitación ya está ocupada o reservada en esas fechas." });
                 return;
             }
 
-            // Si no hay superposición, procede con la inserción, incluyendo el nuevo campo price_per_night
-            const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status, price_per_night) VALUES (?,?,?,?,?,?)';
-            pool.query(insert, [room_id, client_name, start_date, end_date, status, price_per_night], function (err) {
+            // Si no hay superposición, procede con la inserción
+            const insert = 'INSERT INTO bookings (room_id, client_name, start_date, end_date, status, price_per_night) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id'; // Usamos $ y RETURNING ID
+            pool.query(insert, [room_id, client_name, start_date, end_date, status, price_per_night], (err, insertResult) => { // Usamos result
                 if (err) {
                     res.status(400).json({"error": err.message});
                     return;
@@ -84,17 +83,16 @@ router.post('/bookings', (req, res) => {
                 res.status(201).json({
                     message: "Reserva creada exitosamente",
                     data: req.body,
-                    id: this.lastID,
-                    price_per_night: price_per_night // Devolvemos el precio usado
+                    id: insertResult.rows[0].id, // El ID devuelto por RETURNING ID
+                    price_per_night: price_per_night 
                 });
             });
         });
     });
 });
 
-// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO P1/P3)
+// Endpoint para ACTUALIZAR una reserva existente (ACTUALIZADO P1/P3 para Postgres)
 router.put('/bookings/:id', (req, res) => {
-    // Aceptamos price_per_night como un campo actualizable
     const { room_id, client_name, start_date, end_date, status, price_per_night } = req.body;
     const { id } = req.params;
 
@@ -102,36 +100,33 @@ router.put('/bookings/:id', (req, res) => {
         return res.status(400).json({ error: "Faltan campos requeridos." });
     }
 
-    // Usamos COALESCE para solo actualizar price_per_night si se proporciona en el body, 
-    // manteniendo el valor anterior si no se especifica.
-    const update = `UPDATE bookings SET room_id = ?, client_name = ?, start_date = ?, end_date = ?, status = ?, price_per_night = COALESCE(?, price_per_night) WHERE id = ?`;
+    const update = `UPDATE bookings SET room_id = $1, client_name = $2, start_date = $3, end_date = $4, status = $5, price_per_night = COALESCE($6, price_per_night) WHERE id = $7`;
     
-    // Pasamos price_per_night como un parámetro más
-    pool.query(update, [room_id, client_name, start_date, end_date, status, price_per_night, id], function (err) {
+    pool.query(update, [room_id, client_name, start_date, end_date, status, price_per_night, id], (err, result) => {
         if (err) {
             res.status(400).json({"error": err.message});
             return;
         }
-        if (this.changes > 0) {
-            res.status(200).json({ message: "Reserva actualizada exitosamente", changes: this.changes });
+        if (result.rowCount > 0) { // Postgres usa result.rowCount
+            res.status(200).json({ message: "Reserva actualizada exitosamente", changes: result.rowCount });
         } else {
             res.status(404).json({ error: "Reserva no encontrada." });
         }
     });
 });
 
-// Endpoint para obtener una reserva específica por su ID (NUEVO)
+// Endpoint para obtener una reserva específica por su ID (NUEVO para Postgres)
 router.get('/bookings/:id', (req, res) => {
     const { id } = req.params;
-    pool.query("SELECT * FROM bookings WHERE id = ?", [id], (err, row) => {
+    pool.query("SELECT * FROM bookings WHERE id = $1", [id], (err, result) => { // Usamos $1 y result
         if (err) {
             res.status(400).json({"error":err.message});
             return;
         }
-        if (row) {
+        if (result.rows.length > 0) { // Verificamos si hay filas
             res.json({
                 message: "success",
-                data: row // Devuelve un solo objeto de reserva, no un array
+                data: result.rows // Devuelve un solo objeto de reserva, en array
             });
         } else {
             res.status(404).json({"error": "Reserva no encontrada."});
@@ -139,12 +134,12 @@ router.get('/bookings/:id', (req, res) => {
     });
 });
 
-// Función auxiliar para finalizar la actualización de la reserva
+// Función auxiliar para finalizar la actualización de la reserva (No usada en este fragmento, pero la migro)
 function finalizeBookingUpdate(id, client_name, start_date, end_date, status, room_id, res) {
-    const updateQuery = `UPDATE bookings SET client_name = ?, start_date = ?, end_date = ?, status = ?, room_id = ? WHERE id = ?`;
-    pool.query(updateQuery, [client_name, start_date, end_date, status, room_id, id], function (err) {
+    const updateQuery = `UPDATE bookings SET client_name = $1, start_date = $2, end_date = $3, status = $4, room_id = $5 WHERE id = $6`;
+    pool.query(updateQuery, [client_name, start_date, end_date, status, room_id, id], (err, result) => {
         if (err) return res.status(400).json({"error": err.message});
-        res.json({ message: "Reserva actualizada exitosamente.", changes: this.changes });
+        res.json({ message: "Reserva actualizada exitosamente.", changes: result.rowCount });
     });
 }
 
@@ -152,50 +147,52 @@ router.delete('/bookings/:id', (req, res) => {
     const { id } = req.params;
 
     // Verificar el estado actual antes de eliminar
-    pool.query('SELECT status, room_id FROM bookings WHERE id = ?', [id], (err, row) => {
+    pool.query('SELECT status, room_id FROM bookings WHERE id = $1', [id], (err, result) => {
         if (err) return res.status(500).json({ "error": err.message });
-        if (!row) return res.status(404).json({ "error": "Reserva no encontrada." });
+        if (result.rows.length === 0) return res.status(404).json({ "error": "Reserva no encontrada." });
+
+        const row = result.rows; // Fila encontrada
 
         if (row.status === 'occupied' || row.status === 'checked-in') {
             return res.status(403).json({ "error": "No se puede cancelar una reserva con check-in realizado. Use el proceso de check-out." });
         }
 
         // Si es 'reserved' o 'liberated', se puede eliminar (cancelar)
-        pool.query('DELETE FROM bookings WHERE id = ?', id, function (err) {
+        pool.query('DELETE FROM bookings WHERE id = $1', [id], (err, deleteResult) => { // Usamos $1 y result
             if (err) return res.status(400).json({ "error": err.message });
-            res.json({ message: "Reserva cancelada exitosamente.", changes: this.changes });
+            res.json({ message: "Reserva cancelada exitosamente.", changes: deleteResult.rowCount });
         });
     });
 });
 
-// ... dentro de server.js, en la sección de API REST ...
 
 // Endpoint para obtener consumos de una reserva específica
 router.get('/consumptions/:bookingId', (req, res) => {
     const { bookingId } = req.params;
-    pool.query("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, rows) => {
+    pool.query("SELECT * FROM consumptions WHERE booking_id = $1", [bookingId], (err, result) => { // Usamos $1 y result
         if (err) {
             res.status(400).json({"error":err.message});
             return;
         }
-        res.json({ data: rows });
+        res.json({ data: result.rows }); // result.rows
     });
 });
 
 // Endpoint para obtener consumos de una reserva específica
 router.get('/bookings/:bookingId/consumptions', (req, res) => {
     const { bookingId } = req.params;
-    pool.query("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, rows) => {
+    pool.query("SELECT * FROM consumptions WHERE booking_id = $1", [bookingId], (err, result) => { // Usamos $1 y result
         if (err) {
             res.status(400).json({"error":err.message});
             return;
         }
         res.json({
             message: "success",
-            data: rows
+            data: result.rows // result.rows
         });
     });
 });
+// src/routes/api.js (Continuación y fin, corregido)
 
 // Endpoint para añadir un nuevo consumo
 router.post('/consumptions', (req, res) => {
@@ -203,8 +200,8 @@ router.post('/consumptions', (req, res) => {
     if (!booking_id || !description || !amount || !date) {
         return res.status(400).json({ error: "Faltan campos requeridos." });
     }
-    const insert = 'INSERT INTO consumptions (booking_id, description, amount, date) VALUES (?,?,?,?)';
-    pool.query(insert, [booking_id, description, amount, date], function (err) {
+    const insert = 'INSERT INTO consumptions (booking_id, description, amount, date) VALUES ($1,$2,$3,$4) RETURNING id'; // Usamos $ y RETURNING ID
+    pool.query(insert, [booking_id, description, amount, date], (err, result) => { // Usamos result
         if (err) {
             res.status(400).json({"error": err.message});
             return;
@@ -212,7 +209,7 @@ router.post('/consumptions', (req, res) => {
         res.status(201).json({
             message: "Consumo añadido exitosamente",
             data: req.body,
-            id: this.lastID
+            id: result.rows.id // Obtenemos el ID de result.rows.id
         });
     });
 });
@@ -225,13 +222,13 @@ router.put('/rooms/status/:roomId', (req, res) => {
         return res.status(400).json({ error: "Falta el estado de limpieza." });
     }
 
-    const query = `UPDATE rooms SET clean_status = ? WHERE id = ?`;
-    pool.query(query, [clean_status, roomId], function (err) {
+    const query = `UPDATE rooms SET clean_status = $1 WHERE id = $2`; // Usamos $1, $2
+    pool.query(query, [clean_status, roomId], (err, result) => { // Usamos result
         if (err) {
             res.status(400).json({"error": err.message});
             return;
         }
-        res.json({ message: "Estado de limpieza actualizado.", changes: this.changes });
+        res.json({ message: "Estado de limpieza actualizado.", changes: result.rowCount }); // result.rowCount
     });
 });
 
@@ -243,20 +240,20 @@ router.put('/rooms/:id/price', (req, res) => {
         return res.status(400).json({ error: "El precio debe ser un número positivo." });
     }
 
-    pool.query('UPDATE rooms SET price = ? WHERE id = ?', [price, id], function (err) {
+    pool.query('UPDATE rooms SET price = $1 WHERE id = $2', [price, id], (err, result) => { // Usamos $1, $2, result
         if (err) {
             res.status(500).json({ error: err.message });
             return;
         }
-        if (this.changes > 0) {
-            res.status(200).json({ message: "Precio de habitación actualizado exitosamente.", changes: this.changes });
+        if (result.rowCount > 0) { // result.rowCount
+            res.status(200).json({ message: "Precio de habitación actualizado exitosamente.", changes: result.rowCount });
         } else {
             res.status(404).json({ error: "Habitación no encontrada." });
         }
     });
 });
 
-// Endpoint para GENERAR una factura a partir de una reserva (NUEVO P1.1)
+// Endpoint para GENERAR una factura a partir de una reserva (CORREGIDO para Postgres)
 router.post('/invoices/generate/:bookingId', (req, res) => {
     const { bookingId } = req.params;
     const { payment_method } = req.body; 
@@ -266,22 +263,22 @@ router.post('/invoices/generate/:bookingId', (req, res) => {
     }
 
     // 1. Necesitamos OBTENER todos los datos: reserva, consumos, precio/noche
-    pool.query("SELECT * FROM bookings WHERE id = ?", [bookingId], (err, booking) => {
-        if (err || !booking) {
+    pool.query("SELECT * FROM bookings WHERE id = $1", [bookingId], (err, resultBooking) => { // $1, resultBooking
+        if (err || resultBooking.rows.length === 0) {
             return res.status(404).json({ error: "Reserva no encontrada." });
         }
+        const booking = resultBooking.rows;
 
-        pool.query("SELECT * FROM consumptions WHERE booking_id = ?", [bookingId], (err, consumptions) => {
+        pool.query("SELECT * FROM consumptions WHERE booking_id = $1", [bookingId], (err, resultConsumptions) => { // $1, resultConsumptions
             if (err) {
                 return res.status(500).json({ error: "Error al obtener consumos." });
             }
+            const consumptions = resultConsumptions.rows;
 
-            // Validar que el check-out ya se realizó antes de facturar (opcional, pero buena práctica)
             if (booking.status !== 'checked-out') {
                 return res.status(400).json({ error: "No se puede facturar una reserva que no ha completado el check-out." });
             }
 
-            // 2. Calcular el total (la lógica ya la tenemos en el frontend, aquí la replicamos en backend por seguridad/integridad)
             const startDate = new Date(booking.start_date + 'T00:00:00Z');
             const endDate = new Date(booking.end_date + 'T00:00:00Z');
             const durationDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
@@ -289,33 +286,30 @@ router.post('/invoices/generate/:bookingId', (req, res) => {
             const consumptionsTotal = consumptions.reduce((sum, item) => sum + item.amount, 0);
             const totalAmount = stayCost + consumptionsTotal;
 
-            // Preparamos detalles para guardar como JSON en la factura
             const invoiceDetails = JSON.stringify({
                 stay: { description: `Estadía ${durationDays} noches`, amount: stayCost },
                 consumptions: consumptions.map(c => ({ description: c.description, amount: c.amount }))
             });
 
-            // 3. Generar un número de factura simple para MVP (ej: INV-YYYYMMDD-BOOKINGID)
             const issueDate = new Date().toISOString().split('T')[0];
             const invoiceNumber = `INV-${issueDate.replace(/-/g, '')}-${bookingId}`;
 
-             // 4. Insertar la factura (MODIFICADO: añadimos payment_method)
-            const insert = 'INSERT INTO invoices (booking_id, invoice_number, issue_date, total_amount, details, payment_method) VALUES (?, ?, ?, ?, ?, ?)';
-            // Pasamos payment_method como parámetro adicional
-            pool.query(insert, [bookingId, invoiceNumber, issueDate, totalAmount, invoiceDetails, payment_method], function (err) {
-                if (err) { return res.status(409).json({ error: "La reserva ya tiene una factura generada.", invoiceId: this.lastID }); }
+            // 4. Insertar la factura
+            const insert = 'INSERT INTO invoices (booking_id, invoice_number, issue_date, total_amount, details, payment_method) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, invoice_number';
+            pool.query(insert, [bookingId, invoiceNumber, issueDate, totalAmount, invoiceDetails, payment_method], (err, insertResult) => {
+                if (err) { return res.status(409).json({ error: "La reserva ya tiene una factura generada." }); }
                 
-                // ... (Lógica de actualizar estado de limpieza a 'dirty' se mantiene igual) ...
-                pool.query('UPDATE rooms SET clean_status = ? WHERE id = ?', ['dirty', booking.room_id], (updateErr) => {
+                // Actualizar estado de limpieza a 'dirty'
+                pool.query('UPDATE rooms SET clean_status = $1 WHERE id = $2', ['dirty', booking.room_id], (updateErr, updateResult) => {
                     if (updateErr) console.error("Advertencia: No se pudo actualizar el estado de limpieza de la habitación:", updateErr.message);
                     
                     res.status(201).json({
                         message: "Factura generada y habitación marcada como sucia.",
-                        invoiceId: this.lastID,
-                        invoiceNumber: invoiceNumber,
+                        invoiceId: insertResult.rows.id,
+                        invoiceNumber: insertResult.rows.invoice_number,
                         totalAmount: totalAmount,
                         roomStatusUpdatedTo: 'dirty',
-                        paymentMethodUsed: payment_method // Devolvemos el método usado
+                        paymentMethodUsed: payment_method
                     });
                 });
             });
@@ -323,61 +317,62 @@ router.post('/invoices/generate/:bookingId', (req, res) => {
     });
 });
 
-// Endpoint para obtener una factura específica por su ID (NUEVO P1.1)
+// Endpoint para obtener una factura específica por su ID
 router.get('/invoices/:id', (req, res) => {
     const { id } = req.params;
-    pool.query("SELECT * FROM invoices WHERE id = ?", [id], (err, invoice) => {
-        if (err || !invoice) {
+    pool.query("SELECT * FROM invoices WHERE id = $1", [id], (err, result) => {
+        if (err || result.rows.length === 0) {
             res.status(404).json({ error: "Factura no encontrada." });
             return;
         }
+        const invoice = result.rows;
         // Parseamos los detalles JSON antes de enviarlos al frontend
         invoice.details = JSON.parse(invoice.details);
         res.json(invoice);
     });
 });
 
-// Endpoint para listar TODAS las facturas (NUEVO P1.1)
+// Endpoint para listar TODAS las facturas
 router.get('/invoices', (req, res) => {
-    // Para el listado general, no necesitamos los 'details' completos, solo un resumen
-    pool.query("SELECT id, booking_id, invoice_number, issue_date, total_amount FROM invoices ORDER BY issue_date DESC", [], (err, rows) => {
+    pool.query("SELECT id, booking_id, invoice_number, issue_date, total_amount, payment_method FROM invoices ORDER BY issue_date DESC", (err, result) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
         }
-        res.json({ data: rows });
+        res.json({ data: result.rows });
     });
 });
 
-/**** GASTOS */
-// --- Endpoints de Empleados (Employees) (P7) ---
+// --- Endpoints de Empleados (Employees) ---
 router.get('/employees', (req, res) => {
-    pool.query("SELECT * FROM employees", [], (err, rows) => {
+    pool.query("SELECT * FROM employees", (err, result) => {
         if (err) { res.status(500).json({ error: err.message }); return; }
-        res.json({ data: rows });
+        res.json({ data: result.rows });
     });
 });
+
 router.post('/employees', (req, res) => {
     const { name, role, monthly_salary } = req.body;
     if (!name || !role || !monthly_salary) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
-    pool.query('INSERT INTO employees (name, role, monthly_salary) VALUES (?, ?, ?)', [name, role, monthly_salary], function (err) {
+    const insert = 'INSERT INTO employees (name, role, monthly_salary) VALUES ($1, $2, $3) RETURNING id';
+    pool.query(insert, [name, role, monthly_salary], (err, result) => {
         if (err) { res.status(400).json({ error: err.message }); return; }
-        res.status(201).json({ message: "Empleado añadido.", id: this.lastID });
+        res.status(201).json({ message: "Empleado añadido.", id: result.rows.id });
     });
 });
 
 router.put('/employees/:id', (req, res) => {
     const { name, role, monthly_salary } = req.body;
-    pool.query('UPDATE employees SET name = ?, role = ?, monthly_salary = ? WHERE id = ?', [name, role, monthly_salary, req.params.id], function (err) {
+    pool.query('UPDATE employees SET name = $1, role = $2, monthly_salary = $3 WHERE id = $4', [name, role, monthly_salary, req.params.id], (err, result) => {
         if (err) { res.status(400).json({ error: err.message }); return; }
-        res.status(200).json({ message: "Empleado actualizado.", changes: this.changes });
+        res.status(200).json({ message: "Empleado actualizado.", changes: result.rowCount });
     });
 });
 
 router.delete('/employees/:id', (req, res) => {
-    pool.query('DELETE FROM employees WHERE id = ?', req.params.id, function (err) {
+    pool.query('DELETE FROM employees WHERE id = $1', [req.params.id], (err, result) => {
         if (err) { res.status(400).json({ error: err.message }); return; }
-        res.status(200).json({ message: "Empleado eliminado.", changes: this.changes });
+        res.status(200).json({ message: "Empleado eliminado.", changes: result.rowCount });
     });
 });
 
@@ -385,12 +380,14 @@ router.delete('/employees/:id', (req, res) => {
 router.get('/shifts', (req, res) => {
     const { year, month } = req.query; 
     if (!year || !month) { return res.status(400).json({ error: "Se requieren año y mes." }); }
+    // En Postgres, usamos TO_DATE para asegurar que el filtro de rango de fechas funcione bien si es necesario.
+    // O simplemente filtramos por el prefijo del mes si la DB solo tiene YYYY-MM-DD
     const startDate = `${year}-${month}-01`;
-    const endDate = `${year}-${month}-31`; // Simplificado para el mes
-
-    pool.query("SELECT * FROM shifts WHERE shift_date BETWEEN ? AND ?", [startDate, endDate], (err, rows) => {
+    const endDate = `${year}-${month}-31`; // Simplificado para el mes, postgres es flexible con esto
+    
+    pool.query("SELECT * FROM shifts WHERE shift_date BETWEEN $1 AND $2", [startDate, endDate], (err, result) => {
         if (err) { res.status(500).json({ error: err.message }); return; }
-        res.json({ data: rows });
+        res.json({ data: result.rows });
     });
 });
 
@@ -400,48 +397,47 @@ router.post('/shifts', (req, res) => {
     const { employee_id, shift_date, shift_type } = req.body;
     if (!employee_id || !shift_date || !shift_type) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
     
-    // Usamos INSERT OR REPLACE para que si el turno ya existe para esa fecha/empleado, se actualice
-    const query = `INSERT OR REPLACE INTO shifts (employee_id, shift_date, shift_type) VALUES (?, ?, ?)`;
-    pool.query(query, [employee_id, shift_date, shift_type], function (err) {
+    // Usamos INSERT INTO ... ON CONFLICT DO UPDATE SET (El equivalente a INSERT OR REPLACE de SQLite en Postgres)
+    const query = `
+        INSERT INTO shifts (employee_id, shift_date, shift_type) 
+        VALUES ($1, $2, $3)
+        ON CONFLICT (employee_id, shift_date) 
+        DO UPDATE SET shift_type = $3 RETURNING id;
+    `;
+    pool.query(query, [employee_id, shift_date, shift_type], (err, result) => {
         if (err) { res.status(400).json({ error: err.message }); return; }
-        res.status(201).json({ message: "Turno guardado.", id: this.lastID });
+        res.status(201).json({ message: "Turno guardado.", id: result.rows.id });
     });
 });
 
-// Puedes añadir endpoints POST, PUT, DELETE para empleados si lo necesitas más adelante (CRUD completo)
-// Pero por ahora GET es suficiente para el reporte.
 
-
-// --- Endpoints de Gastos (Expenses) (P7) ---
+// --- Endpoints de Gastos (Expenses) ---
 router.get('/expenses', (req, res) => {
-    // Retornamos todos los gastos por ahora
-    pool.query("SELECT * FROM expenses ORDER BY date DESC", [], (err, rows) => {
+    pool.query("SELECT * FROM expenses ORDER BY date DESC", (err, result) => {
         if (err) { res.status(500).json({ error: err.message }); return; }
-        res.json({ data: rows });
+        res.json({ data: result.rows });
     });
 });
 
 router.post('/expenses', (req, res) => {
     const { description, amount, date, category } = req.body;
     if (!description || !amount || !date || !category) { return res.status(400).json({ error: "Faltan campos requeridos." }); }
-    const insert = 'INSERT INTO expenses (description, amount, date, category) VALUES (?, ?, ?, ?)';
-    pool.query(insert, [description, amount, date, category], function (err) {
+    const insert = 'INSERT INTO expenses (description, amount, date, category) VALUES ($1, $2, $3, $4) RETURNING id';
+    pool.query(insert, [description, amount, date, category], (err, result) => {
         if (err) { res.status(400).json({ error: err.message }); return; }
-        res.status(201).json({ message: "Gasto añadido exitosamente", id: this.lastID });
+        res.status(201).json({ message: "Gasto añadido exitosamente", id: result.rows.id });
     });
 });
 
-// --- Endpoint de Reporte de Ganancias Mensual (P7) ---
+// --- Endpoint de Reporte de Ganancias Mensual ---
 router.get('/reports/profit-loss', (req, res) => {
-    const { year, month } = req.query; // Esperamos year=YYYY, month=MM (ej: 01 para enero)
+    const { year, month } = req.query; 
 
     if (!year || !month) {
         return res.status(400).json({ error: "Se requieren los parámetros 'year' y 'month'." });
     }
 
-    // SQLite usa formato TEXT YYYY-MM-DD. Filtramos por rango de fechas.
     const startDate = `${year}-${month}-01`;
-    // Calcular el último día del mes (un poco complejo en SQL puro, más fácil en JS)
     const lastDay = new Date(year, month, 0).getDate(); 
     const endDate = `${year}-${month}-${lastDay}`;
     
@@ -454,26 +450,22 @@ router.get('/reports/profit-loss', (req, res) => {
     };
 
     // 1. Calcular Ingresos (Total Facturado en el mes)
-    const invoicesQuery = `SELECT SUM(total_amount) as total FROM invoices WHERE issue_date BETWEEN ? AND ?`;
-    pool.query(invoicesQuery, [startDate, endDate], (err, row) => {
-        if (err) return res.status(500).json({ error: "en invoice query" });
-        responseData.invoicesTotal = row.total || 0;
+    const invoicesQuery = `SELECT SUM(total_amount) as total FROM invoices WHERE issue_date BETWEEN $1 AND $2`;
+    pool.query(invoicesQuery, [startDate, endDate], (err, result) => {
+        if (err) return res.status(500).json({ error: "en invoice query: " + err.message });
+        responseData.invoicesTotal = parseFloat(result.rows.total) || 0; // Postgres devuelve total como string/null
 
         // 2. Calcular Gastos Operativos (en el mes)
-        const expensesQuery = `SELECT SUM(amount) as total FROM expenses WHERE date BETWEEN ? AND ?`;
-        pool.query(expensesQuery, [startDate, endDate], (err, row) => {
-            if (err) return res.status(500).json({ error: "en expenses query" });
-            responseData.expensesTotal = row.total || 0;
+        const expensesQuery = `SELECT SUM(amount) as total FROM expenses WHERE date BETWEEN $1 AND $2`;
+        pool.query(expensesQuery, [startDate, endDate], (err, resultExp) => {
+            if (err) return res.status(500).json({ error: "en expenses query: " + err.message });
+            responseData.expensesTotal = parseFloat(resultExp.rows.total) || 0;
 
-            // 3. Calcular Sueldos (Asumimos que todos los empleados cobran cada mes, independientemente de la fecha de gasto)
+            // 3. Calcular Sueldos (Asumimos que todos los empleados cobran cada mes)
             const salariesQuery = `SELECT SUM(monthly_salary) as total FROM employees`;
-            pool.query(salariesQuery, (err, row) => { 
-                if (err) { 
-                    console.error(err); 
-                    return res.status(500).json({ error: "Error 500 en consulta de Sueldos: " + err.message });
-                }
-                // CLAVE: Nos aseguramos de manejar 'row' aunque 'total' sea null/undefined (si no hay empleados)
-                responseData.salariesTotal = (row && row.total) || 0; 
+            pool.query(salariesQuery, (err, resultSal) => { 
+                if (err) { console.error(err); return res.status(500).json({ error: "Error 500 en consulta de Sueldos: " + err.message }); }
+                responseData.salariesTotal = parseFloat(resultSal.rows.total) || 0; 
                 
                 // 4. Calcular Ganancia
                 const totalCosts = responseData.expensesTotal + responseData.salariesTotal;
@@ -484,46 +476,47 @@ router.get('/reports/profit-loss', (req, res) => {
             });
         });
     });
-
 });
 
-router.put('/user/password', (req, res) => {
-        const { currentPassword, newPassword } = req.body;
-        // req.cookies.user_id es accesible gracias a authenticateMiddleware y cookie-parser
-        const userId = req.cookies.user_id; 
 
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ error: "Faltan la contraseña actual o la nueva contraseña." });
+// Endpoint para cambiar la contraseña del usuario logueado
+router.put('/user/password', (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.cookies.user_id; 
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "Faltan la contraseña actual o la nueva contraseña." });
+    }
+    
+    // 1. Obtener el hash actual del usuario desde la DB
+    pool.query("SELECT password FROM users WHERE id = $1", [userId], (err, result) => {
+        if (err || result.rows.length === 0) {
+            return res.status(500).json({ error: "Error interno al verificar usuario." });
         }
-        
-        // 1. Obtener el hash actual del usuario desde la DB
-        pool.query("SELECT password FROM users WHERE id = ?", [userId], (err, user) => {
-            if (err || !user) {
-                return res.status(500).json({ error: "Error interno al verificar usuario." });
+        const user = result.rows;
+
+        // 2. Comparar la contraseña actual ingresada con el hash guardado
+        bcrypt.compare(currentPassword, user.password, (compareErr, bcryptResult) => {
+            if (!bcryptResult) {
+                return res.status(401).json({ error: "La contraseña actual es incorrecta." });
             }
 
-            // 2. Comparar la contraseña actual ingresada con el hash guardado
-            bcrypt.compare(currentPassword, user.password, (compareErr, result) => {
-                if (!result) {
-                    return res.status(401).json({ error: "La contraseña actual es incorrecta." });
+            // 3. Si la actual es correcta, hashear la nueva contraseña
+            bcrypt.hash(newPassword, saltRounds, (hashErr, hashedPassword) => {
+                if (hashErr) {
+                    return res.status(500).json({ error: "Error al hashear la nueva contraseña." });
                 }
 
-                // 3. Si la actual es correcta, hashear la nueva contraseña
-                bcrypt.hash(newPassword, saltRounds, (hashErr, hashedPassword) => {
-                    if (hashErr) {
-                        return res.status(500).json({ error: "Error al hashear la nueva contraseña." });
+                // 4. Guardar el nuevo hash en la base de datos
+                pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashedPassword, userId], (updateErr, updateResult) => {
+                    if (updateErr) {
+                        return res.status(500).json({ error: "Error al actualizar la contraseña en la DB." });
                     }
-                    // 4. Guardar el nuevo hash en la base de datos
-                    pool.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId], function (updateErr) {
-                        if (updateErr) {
-                            return res.status(500).json({ error: "Error al actualizar la contraseña en la DB." });
-                        }
-                        res.status(200).json({ message: "Contraseña actualizada exitosamente." });
-                    });
+                    res.status(200).json({ message: "Contraseña actualizada exitosamente." });
                 });
             });
         });
-
+    });
 });
 
 
