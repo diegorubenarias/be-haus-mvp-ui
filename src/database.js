@@ -1,3 +1,5 @@
+const bcrypt = require('bcrypt'); // Importamos bcrypt
+const saltRounds = 10; // Nivel de seguridad para el hash
 const sqlite3 = require('sqlite3').verbose();
 
 // --- Configuración de la Base de Datos ---
@@ -42,6 +44,7 @@ const db = new sqlite3.Database('./hotel_bookings.db', (err) => {
             issue_date TEXT NOT NULL,
             total_amount REAL NOT NULL,
             details TEXT, -- Un campo JSON o texto para guardar los detalles de la línea (estadia y consumos)
+            payment_method TEXT NOT NULL DEFAULT 'Contado', 
             FOREIGN KEY(booking_id) REFERENCES bookings(id)
         );`);
 
@@ -112,8 +115,12 @@ function seedDatabase(db) {
     // NUEVO: Insertar usuario inicial
     db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
         if (row && row.count === 0) {
+             const passwordTextoPlano = '1234';
+            // Generamos el hash de forma síncrona para simplificar el script de inicialización
+            const hashedPassword = bcrypt.hashSync(passwordTextoPlano, saltRounds);
+
             // NOTA: En producción usarías hashing (ej: bcrypt). Para este MVP, texto plano está bien.
-            db.run('INSERT INTO users (username, password) VALUES (?, ?)', ['admin', '1234']);
+            db.run('INSERT INTO users (username, password) VALUES (?, ?)', ['admin',hashedPassword]);
             console.log("Usuario inicial 'admin'/'1234' insertado.");
         }
     });

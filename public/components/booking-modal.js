@@ -89,6 +89,15 @@ class BookingModal extends HTMLElement {
                             <div class="total-amount">Total a Pagar: $<span id="totalAmountDisplay">0.00</span></div>
                             
                             <hr>
+                             <!-- NUEVO: Selector de Método de Pago -->
+                            <div class="form-group">
+                                <label for="paymentMethodSelect">Método de Pago:</label>
+                                <select id="paymentMethodSelect">
+                                    <option value="Contado">Contado</option>
+                                    <option value="Tarjeta">Tarjeta de Crédito/Débito</option>
+                                    <option value="Cuenta Corriente">Cuenta Corriente (Crédito Hotelero)</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <input type="text" id="consumptionDescription" placeholder="Descripción (ej: Minibar, Lavandería)">
                                 <input type="number" id="consumptionAmount" placeholder="Monto ($)" min="0">
@@ -152,6 +161,8 @@ class BookingModal extends HTMLElement {
         }
 
         const total = this.shadow.getElementById('totalAmountDisplay').textContent;
+        const paymentMethod = this.shadow.getElementById('paymentMethodSelect').value;
+
         if (confirm(`El total a pagar es $${total}. ¿Confirmar Check-Out y generar factura?`)) {
             // 1. Establecer el estado a checked-out en el select
             this.shadow.getElementById('statusSelect').value = 'checked-out';
@@ -163,7 +174,7 @@ class BookingModal extends HTMLElement {
                 
                 // 3. Si se guardó correctamente, generamos la factura usando el ID retornado.
                 if (this.currentBookingId) {
-                    await this.generateInvoice(this.currentBookingId);
+                    await this.generateInvoice(this.currentBookingId, paymentMethod); 
                 } else {
                     throw new Error("El ID de reserva necesario para facturar no se pudo obtener.");
                 }
@@ -178,20 +189,21 @@ class BookingModal extends HTMLElement {
 
 // ...
 
-
-    // NUEVA FUNCION: Generar la factura
-    async generateInvoice(bookingId) {
+    async generateInvoice(bookingId, paymentMethod) {
         try {
             const response = await fetch(`/api/invoices/generate/${bookingId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                // Enviamos el método de pago en el body
+                body: JSON.stringify({ payment_method: paymentMethod }) 
             });
 
             if (response.ok) {
                 const data = await response.json();
-                alert(`Check-out completado. Factura #${data.invoiceNumber} generada exitosamente.`);
-                // Opcional: Redirigir al usuario a ver la factura generada
-                // window.location.href = `/invoices.html?id=${data.invoiceId}`;
+                alert(`Check-out completado. Factura #${data.invoiceNumber} generada exitosamente. Método: ${data.paymentMethodUsed}`);
+                // Notificar al planificador que debe refrescar los datos
+                document.dispatchEvent(new CustomEvent('booking-saved'));
+                this.closeModal();
             } else {
                 const errorData = await response.json();
                 alert(`Facturación completada con advertencias: ${errorData.error}`);

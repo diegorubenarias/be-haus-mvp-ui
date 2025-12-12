@@ -84,6 +84,9 @@ class InvoiceDetailView extends HTMLElement {
                         <strong>Cliente:</strong> <span id="clientName"></span><br>
                         <strong>Estadía:</strong> <span id="stayDates"></span>
                     </div>
+                    <div>
+                        <strong>Método de Pago:</strong> <span id="paymentMethod"></span>
+                    </div>
                 </div>
 
                 <table>
@@ -169,6 +172,9 @@ class InvoiceDetailView extends HTMLElement {
         this.shadowRoot.getElementById('bookingId').textContent = invoice.booking_id;
         this.shadowRoot.getElementById('clientName').textContent = booking.client_name;
         this.shadowRoot.getElementById('stayDates').textContent = `${booking.start_date} al ${booking.end_date}`;
+         // MOSTRAR EL NUEVO MÉTODO DE PAGO
+        this.shadowRoot.getElementById('paymentMethod').textContent = invoice.payment_method; 
+       
         
         const tbody = this.shadowRoot.getElementById('invoiceItems');
         tbody.innerHTML = '';

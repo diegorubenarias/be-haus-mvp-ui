@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { authenticateMiddleware } = require('../auth');
+const bcrypt = require('bcrypt');
+const saltRounds = 10; // Mismo nivel de seguridad que en database.js
 
 // Aplicamos el middleware de autenticación a todas las rutas de este router por defecto
 router.use(authenticateMiddleware);
@@ -257,6 +259,11 @@ router.put('/rooms/:id/price', (req, res) => {
 // Endpoint para GENERAR una factura a partir de una reserva (NUEVO P1.1)
 router.post('/invoices/generate/:bookingId', (req, res) => {
     const { bookingId } = req.params;
+    const { payment_method } = req.body; 
+
+    if (!payment_method) {
+        return res.status(400).json({ error: "Se requiere el método de pago." });
+    }
 
     // 1. Necesitamos OBTENER todos los datos: reserva, consumos, precio/noche
     db.get("SELECT * FROM bookings WHERE id = ?", [bookingId], (err, booking) => {
@@ -292,27 +299,23 @@ router.post('/invoices/generate/:bookingId', (req, res) => {
             const issueDate = new Date().toISOString().split('T')[0];
             const invoiceNumber = `INV-${issueDate.replace(/-/g, '')}-${bookingId}`;
 
-            // 4. Insertar la factura
-            const insert = 'INSERT INTO invoices (booking_id, invoice_number, issue_date, total_amount, details) VALUES (?, ?, ?, ?, ?)';
-            db.run(insert, [bookingId, invoiceNumber, issueDate, totalAmount, invoiceDetails], function (err) {
-                if (err) {
-                    // Esto puede ocurrir si intentan facturar la misma reserva dos veces (UNIQUE constraint)
-                    return res.status(409).json({ error: "La reserva ya tiene una factura generada.", invoiceId: this.lastID });
-                }
-                 // Cuando la factura se genera exitosamente, actualizamos el estado de la habitación a 'dirty'
+             // 4. Insertar la factura (MODIFICADO: añadimos payment_method)
+            const insert = 'INSERT INTO invoices (booking_id, invoice_number, issue_date, total_amount, details, payment_method) VALUES (?, ?, ?, ?, ?, ?)';
+            // Pasamos payment_method como parámetro adicional
+            db.run(insert, [bookingId, invoiceNumber, issueDate, totalAmount, invoiceDetails, payment_method], function (err) {
+                if (err) { return res.status(409).json({ error: "La reserva ya tiene una factura generada.", invoiceId: this.lastID }); }
+                
+                // ... (Lógica de actualizar estado de limpieza a 'dirty' se mantiene igual) ...
                 db.run('UPDATE rooms SET clean_status = ? WHERE id = ?', ['dirty', booking.room_id], (updateErr) => {
-                    if (updateErr) {
-                        console.error("Advertencia: No se pudo actualizar el estado de limpieza de la habitación:", updateErr.message);
-                        // No es un error crítico para la facturación, solo lo logeamos.
-                    }
+                    if (updateErr) console.error("Advertencia: No se pudo actualizar el estado de limpieza de la habitación:", updateErr.message);
                     
-                    // Respuesta final exitosa, incluyendo el nuevo estado de limpieza
                     res.status(201).json({
                         message: "Factura generada y habitación marcada como sucia.",
                         invoiceId: this.lastID,
                         invoiceNumber: invoiceNumber,
                         totalAmount: totalAmount,
-                        roomStatusUpdatedTo: 'dirty'
+                        roomStatusUpdatedTo: 'dirty',
+                        paymentMethodUsed: payment_method // Devolvemos el método usado
                     });
                 });
             });
@@ -481,6 +484,46 @@ router.get('/reports/profit-loss', (req, res) => {
             });
         });
     });
+
+});
+
+router.put('/user/password', (req, res) => {
+        const { currentPassword, newPassword } = req.body;
+        // req.cookies.user_id es accesible gracias a authenticateMiddleware y cookie-parser
+        const userId = req.cookies.user_id; 
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: "Faltan la contraseña actual o la nueva contraseña." });
+        }
+        
+        // 1. Obtener el hash actual del usuario desde la DB
+        db.get("SELECT password FROM users WHERE id = ?", [userId], (err, user) => {
+            if (err || !user) {
+                return res.status(500).json({ error: "Error interno al verificar usuario." });
+            }
+
+            // 2. Comparar la contraseña actual ingresada con el hash guardado
+            bcrypt.compare(currentPassword, user.password, (compareErr, result) => {
+                if (!result) {
+                    return res.status(401).json({ error: "La contraseña actual es incorrecta." });
+                }
+
+                // 3. Si la actual es correcta, hashear la nueva contraseña
+                bcrypt.hash(newPassword, saltRounds, (hashErr, hashedPassword) => {
+                    if (hashErr) {
+                        return res.status(500).json({ error: "Error al hashear la nueva contraseña." });
+                    }
+                    // 4. Guardar el nuevo hash en la base de datos
+                    db.run("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId], function (updateErr) {
+                        if (updateErr) {
+                            return res.status(500).json({ error: "Error al actualizar la contraseña en la DB." });
+                        }
+                        res.status(200).json({ message: "Contraseña actualizada exitosamente." });
+                    });
+                });
+            });
+        });
+
 });
 
 

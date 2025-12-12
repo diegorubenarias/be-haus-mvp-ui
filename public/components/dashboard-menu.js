@@ -25,6 +25,7 @@ class DashboardMenu extends HTMLElement {
                     <li><a href="/prices.html">Precios</a></li>
                      <li><a href="/invoices.html">Facturas</a></li> 
                      <li><a href="/expenses.html">Gastos</a></li> 
+                     <li><a href="/settings-panel.html">Ajustes</a></li> 
                     <!-- Reemplazamos el <a> por un botón que maneja el logout real -->
                     <li><button class="logout-btn" id="logoutButton">Cerrar Sesión</button></li>
                 </ul>
