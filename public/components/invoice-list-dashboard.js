@@ -56,7 +56,7 @@ class InvoiceListDashboard extends HTMLElement {
                 <td>${invoice.invoice_number}</td>
                 <td>${invoice.booking_id}</td>
                 <td>${invoice.issue_date}</td>
-                <td>$${invoice.total_amount.toFixed(2)}</td>
+                <td>$${parseFloat(invoice.total_amount).toFixed(2)}</td>
                 <!-- ENLACE ACTUALIZADO -->
                 <td><a href="/invoice-detail.html?id=${invoice.id}" target="_blank">Ver/Imprimir</a></td>
             `;

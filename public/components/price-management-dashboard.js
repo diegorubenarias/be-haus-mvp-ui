@@ -61,7 +61,7 @@ class PriceManagementDashboard extends HTMLElement {
                 <td>${room.id}</td>
                 <td>${room.name}</td>
                 <td>
-                    <input type="number" id="price-${room.id}" value="${room.price.toFixed(2)}" step="0.01" min="0">
+                    <input type="number" id="price-${room.id}" value="${parseFloat(room.price).toFixed(2)}" step="0.01" min="0">
                 </td>
                 <td>
                     <button data-room-id="${room.id}">Actualizar</button>
@@ -93,7 +93,7 @@ class PriceManagementDashboard extends HTMLElement {
             });
 
             if (response.ok) {
-                this.showMessage(`Precio de habitación ${roomId} actualizado a $${newPrice.toFixed(2)}.`, "success");
+                this.showMessage(`Precio de habitación ${roomId} actualizado a $${parseFloat(newPrice).toFixed(2)}.`, "success");
                 // Opcional: refetch para asegurar consistencia
                 // this.fetchPrices(); 
             } else {

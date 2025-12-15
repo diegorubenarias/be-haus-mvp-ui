@@ -107,7 +107,7 @@ class MonthlyOccupancyReport extends HTMLElement {
         rooms.forEach(room => {
             const occupied = occupancyData[room.id];
             totalOccupiedDays += occupied;
-            const percentage = ((occupied / daysInMonth) * 100).toFixed(1);
+            const percentage = parseFloat((occupied / daysInMonth * 100)).toFixed(1);
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -119,7 +119,7 @@ class MonthlyOccupancyReport extends HTMLElement {
         });
 
         // Resumen general
-        const overallOccupancy = ((totalOccupiedDays / (daysInMonth * rooms.length)) * 100).toFixed(1);
+        const overallOccupancy = parseFloat((totalOccupiedDays / (daysInMonth * rooms.length) * 100)).toFixed(1);
         this.shadowRoot.getElementById('reportSummary').innerHTML = `
             <p>Total de Días en el Mes: ${daysInMonth}</p>
             <p>Ocupación General del Hotel: <strong>${overallOccupancy}%</strong></p>

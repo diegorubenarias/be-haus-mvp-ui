@@ -7,10 +7,9 @@ class DailySummary extends HTMLElement {
             <style>
                 .summary-grid {
                     display: grid;
-                    grid-template-columns: repeat(3, 1fr); /* 3 columnas ahora */
+                    grid-template-columns: repeat(3, 1fr);
                     gap: 20px;
                 }
-                /* ... (Estilos summary-card, h4, ul, li se mantienen igual) ... */
                  .summary-card {
                     background: white;
                     padding: 20px;
@@ -30,7 +29,6 @@ class DailySummary extends HTMLElement {
                     border-bottom: 1px solid #eee;
                 }
 
-                /* Colores específicos para estados de limpieza */
                 .status-dirty { color: #f44336; font-weight: bold; }
                 .status-servicing { color: #ff9800; font-weight: bold; }
             </style>
@@ -43,12 +41,10 @@ class DailySummary extends HTMLElement {
                     <h4>Check-Outs Hoy</h4>
                     <ul id="checkOutsList"></ul>
                 </div>
-                 <!-- NUEVA SECCIÓN 1: Limpieza -->
                 <div class="summary-card">
                     <h4>Estado de Habitaciones</h4>
                     <ul id="housekeepingList"></ul>
                 </div>
-                 <!-- NUEVA SECCIÓN 2: Empleados -->
                  <div class="summary-card" style="grid-column: span 3;">
                     <h4>Personal de Turno Hoy</h4>
                     <ul id="shiftsList"></ul>
@@ -63,27 +59,23 @@ class DailySummary extends HTMLElement {
 
     async fetchDailyData() {
         // Obtenemos la fecha de hoy en formato YYYY-MM-DD para usar en las consultas de API
+        // todayISO sigue siendo solo la fecha local "2025-12-01"
         const todayISO = new Date().toISOString().split('T')[0];
 
         try {
-            // Hacemos fetch concurrente de todas las APIs necesarias
             const [bookingsRes, roomsRes, shiftsRes, employeesRes] = await Promise.all([
                 fetch('/api/bookings'),
                 fetch('/api/rooms'),
-                // Asumimos que la API de shifts puede filtrar por fecha si le pasamos query params
                 fetch(`/api/shifts?year=${todayISO.substring(0,4)}&month=${todayISO.substring(5,7)}`), 
                 fetch('/api/employees')
             ]);
             
-            // Validación básica de errores de autenticación
-             if (bookingsRes.status === 401) { window.location.href = '/'; return; }
-
+            if (bookingsRes.status === 401) { window.location.href = '/'; return; }
 
             const bookingsData = await bookingsRes.json();
             const roomsData = await roomsRes.json();
             const shiftsData = await shiftsRes.json();
             const employeesData = await employeesRes.json();
-
 
             this.renderBookingsLists(bookingsData.data, todayISO);
             this.renderHousekeepingList(roomsData.data);
@@ -95,11 +87,12 @@ class DailySummary extends HTMLElement {
             root.getElementById('checkInsList').innerHTML = '<li>Error al cargar datos.</li>';
             root.getElementById('checkOutsList').innerHTML = '<li>Error al cargar datos.</li>';
             root.getElementById('housekeepingList').innerHTML = '<li>Error al cargar datos.</li>';
-             root.getElementById('shiftsList').innerHTML = '<li>Error al cargar datos.</li>';
+            root.getElementById('shiftsList').innerHTML = '<li>Error al cargar datos.</li>';
         }
     }
 
-    // Renombramos y ajustamos la función de renderizado de reservas
+    // --- FUNCIONES DE RENDERIZADO AJUSTADAS PARA NUEVO FORMATO DE FECHA ---
+
     renderBookingsLists(bookings, todayISO) {
         const checkInsList = this.shadowRoot.getElementById('checkInsList');
         const checkOutsList = this.shadowRoot.getElementById('checkOutsList');
@@ -107,14 +100,16 @@ class DailySummary extends HTMLElement {
         checkInsList.innerHTML = '';
         checkOutsList.innerHTML = '';
 
-        // Filtramos por fecha exacta de inicio/fin HOY
-        const checkIns = bookings.filter(b => b.start_date === todayISO && b.status === 'reserved');
-        const checkOuts = bookings.filter(b => b.end_date === todayISO && b.status !== 'checked-out');
+        // AJUSTE CLAVE AQUÍ: Usamos una función para normalizar la fecha de la API a YYYY-MM-DD local
+        const normalizeDate = (apiDateString) => new Date(apiDateString).toISOString().split('T')[0];
+
+        const checkIns = bookings.filter(b => normalizeDate(b.start_date) === todayISO && b.status === 'reserved');
+        const checkOuts = bookings.filter(b => normalizeDate(b.end_date) === todayISO && b.status !== 'checked-out');
         
+        // ... el resto de la lógica de renderizado se mantiene igual ...
         if (checkIns.length > 0) {
             checkIns.forEach(booking => {
                 const li = document.createElement('li');
-                // Mejoramos la visualización, asociando el room_id al nombre (si tuvieramos un mapa de habitaciones)
                 li.textContent = `Hab. ID ${booking.room_id}: ${booking.client_name}`;
                 checkInsList.appendChild(li);
             });
@@ -133,12 +128,11 @@ class DailySummary extends HTMLElement {
         }
     }
 
-    // NUEVA FUNCIÓN: Resumen de Limpieza
     renderHousekeepingList(rooms) {
+        // ... esta función no usa fechas, se mantiene igual ...
         const list = this.shadowRoot.getElementById('housekeepingList');
         list.innerHTML = '';
         
-        // Filtramos las habitaciones que NO están limpias
         const nonCleanRooms = rooms.filter(r => r.clean_status !== 'clean');
         
         if (nonCleanRooms.length > 0) {
@@ -153,16 +147,17 @@ class DailySummary extends HTMLElement {
         }
     }
 
-     // NUEVA FUNCIÓN: Resumen de Turnos de Empleados
     renderShiftsList(shifts, employees, todayISO) {
         const list = this.shadowRoot.getElementById('shiftsList');
         list.innerHTML = '';
         
-        // Mapeamos empleados por ID para fácil acceso
         const employeeMap = new Map(employees.map(emp => [emp.id, emp.name]));
 
+        // AJUSTE CLAVE AQUÍ TAMBIÉN: Normalizar la fecha del turno
+        const normalizeDate = (apiDateString) => new Date(apiDateString).toISOString().split('T')[0];
+
         // Filtramos los turnos que son para HOY (la API ya filtra por mes/año)
-        const todayShifts = shifts.filter(s => s.shift_date === todayISO);
+        const todayShifts = shifts.filter(s => normalizeDate(s.shift_date) === todayISO);
 
         if (todayShifts.length > 0) {
             todayShifts.forEach(shift => {

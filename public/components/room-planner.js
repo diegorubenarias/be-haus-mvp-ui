@@ -59,7 +59,13 @@ class RoomPlanner extends HTMLElement {
             if (roomsRes.status === 401 || bookingsRes.status === 401) { window.location.href = '/'; return; }
             const roomsData = await roomsRes.json();
             const bookingsData = await bookingsRes.json();
-            this.rooms = roomsData.data; this.bookings = bookingsData.data;
+            
+            // CONVERTIMOS A FLOAT INMEDIATAMENTE si el backend envía strings para NUMERIC
+            this.rooms = roomsData.data.map(r => ({ ...r, price: parseFloat(r.price) }));
+            // Asumimos que bookingsData.data también tiene price_per_night como string que parsearemos en findBookingForDay
+
+            this.bookings = bookingsData.data;
+
         } catch (error) {
             console.error("Error en fetchData:", error);
         }
@@ -85,13 +91,10 @@ class RoomPlanner extends HTMLElement {
 
     renderGrid() {
         const grid = this.shadowRoot.getElementById('plannerGrid');
-        // Limpiamos el grid antes de renderizar
         grid.innerHTML = ''; 
         
-        // Ajuste dinámico de columnas (asume this.daysInMonth ya calculado)
         this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${this.daysInMonth}, 40px)`;
 
-        // Preparamos las clases de fin de semana para las celdas de días
         let dayOfWeek = new Date(this.currentYear, this.currentMonthIndex, 1).getDay();
         const dayClasses = [];
         for (let i = 0; i < this.daysInMonth; i++) {
@@ -108,13 +111,15 @@ class RoomPlanner extends HTMLElement {
             headerCell.textContent = i;
             grid.appendChild(headerCell);
         }
+        
       // --- Bucle de renderizado de celdas por habitación (Filas 2+) ---
         if (this.rooms && this.rooms.length > 0) {
             this.rooms.forEach(room => {
                 
                 // 1. Renderizar la celda de la cabecera de la habitación (sticky left)
+                // Esto es lo que no te cambiaba de color, pero debería funcionar si el backend envía el dato.
                 const roomHeaderCell = document.createElement('div');
-                roomHeaderCell.classList.add('cell', 'room-header', 'clean-status-header', room.clean_status); // APLICAMOS EL ESTADO DE LIMPIEZA AQUI
+                roomHeaderCell.classList.add('cell', 'room-header', 'clean-status-header', room.clean_status || 'clean'); // Default a 'clean' si es nulo
                 roomHeaderCell.dataset.roomId = room.id;
                 roomHeaderCell.textContent = room.name;
                 grid.appendChild(roomHeaderCell);
@@ -128,90 +133,97 @@ class RoomPlanner extends HTMLElement {
                     
                     if (dayClasses[i - 1] === 'weekend-cell') { cell.classList.add('weekend-cell'); }
 
-                    const booking = this.findBookingForDay(room.id, i);
+                    // *** LÓGICA DE FECHA COMPATIBLE CON POSTGRES ISO STRING ***
+                    const booking = this.findBookingForDay(room.id, i); 
+
                     if (booking) {
                         cell.classList.remove('status-liberated'); 
                         cell.classList.add(`status-${booking.status}`);
-                          // Aseguramos que la celda ocupada no tome el color de fondo del fin de semana
                         if(dayClasses[i - 1] === 'weekend-cell' && booking.status !== 'liberated') { 
                             cell.classList.remove('weekend-cell'); 
                         }
                         cell.textContent = `${booking.client_name.split(' ')[0]} (${booking.status.charAt(0).toUpperCase()})`;
                         cell.dataset.bookingId = booking.id;
                     }
-                    // Usamos delegación de eventos, no listeners individuales aquí.
-                    grid.appendChild(cell);
+                    grid.appendChild(cell); // Cerraba tu código aquí
                 }
             });
         }
     }
-     // ... dentro de RoomPlanner class ...
-
+    
+    // *** FUNCIÓN CLAVE PARA MANEJAR FECHAS ISO DE POSTGRES ***
     findBookingForDay(roomId, day) {
+        // Creamos la fecha exacta que estamos buscando en el bucle
         const targetDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
-        return this.bookings.find(b => {
-            const start = new Date(b.start_date + 'T00:00:00Z'); 
-            const end = new Date(b.end_date + 'T00:00:00Z');
-            
-            // Solo devolvemos la reserva si está activa (occupied o reserved)
-            const isActive = (b.status === 'occupied' || b.status === 'reserved');
+        // Normalizamos targetDate a YYYY-MM-DD para comparación simple si es necesario, pero comparar objetos Date es mejor
+        targetDate.setUTCHours(0, 0, 0, 0); 
 
-            return b.room_id == roomId && targetDate >= start && targetDate < end && isActive; 
+        const bookingsForRoom = this.bookings.filter(b => b.room_id === roomId);
+
+        return bookingsForRoom.find(booking => {
+            // Parseamos las fechas ISO completas que vienen de PostgreSQL a objetos Date UTC
+            const startDate = new Date(booking.start_date);
+            const endDate = new Date(booking.end_date);
+            startDate.setUTCHours(0, 0, 0, 0);
+            endDate.setUTCHours(0, 0, 0, 0);
+            
+            // Comparamos si la fecha actual del bucle (targetDate) está dentro del rango de la reserva
+            // targetDate >= startDate Y targetDate < endDate (el check-out es al día siguiente de la última noche de estancia)
+            return targetDate >= startDate && targetDate < endDate;
         });
     }
-
-    // Maneja todos los clics del grid a través de delegación
-    handleGridClick(event) {
-        let cell = event.target;
-        while (cell !== this.shadowRoot.getElementById('plannerGrid') && !cell.classList.contains('cell')) {
-            cell = cell.parentNode;
+ handleGridClick(event) {
+        const cell = event.target;
+        if (!cell.classList.contains('cell') || cell.classList.contains('header-cell') || cell.classList.contains('room-header')) {
+            return;
         }
 
-        if (cell.classList.contains('cell') && !cell.classList.contains('header-cell')) {
-            this.handleCellClickLogic(cell);
-        }
-    }
+        const roomId = parseInt(cell.dataset.roomId);
+        const day = parseInt(cell.dataset.day);
+        
+        if (cell.dataset.bookingId) {
+            // Si tiene ID de reserva, mostramos detalles (asume que tienes un modal o componente de detalles)
+            const bookingId = parseInt(cell.dataset.bookingId);
+            // Disparamos un evento para que el componente padre (App/Dashboard) muestre un modal de detalles
+            document.dispatchEvent(new CustomEvent('show-booking-details', {
+                detail: { bookingId: bookingId }
+            }));
 
-    // Lógica de click separada que EMITE UN EVENTO
-       // ... dentro de RoomPlanner class, reemplaza handleCellClickLogic ...
-
-    // Lógica de click separada que EMITE UN EVENTO
-     // ... dentro de RoomPlanner class ...
-
-    // Lógica de click separada que EMITE UN EVENTO
-    handleCellClickLogic(cell) {
-        const day = cell.dataset.day;
-        const clickedDate = new Date(Date.UTC(this.currentYear, this.currentMonthIndex, day));
-        const formattedDate = clickedDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-        const roomId = cell.dataset.roomId;
-        const roomDetails = this.rooms.find(r => r.id == roomId);
-
-        // Si findBookingForDay devuelve null, 'existingBooking' será null, indicando NUEVA reserva.
-        const existingBooking = this.findBookingForDay(roomId, day);
-
-        const eventDetail = {
-            roomId: roomId,
-            roomName: roomDetails ? roomDetails.name : `Habitación ${roomId}`,
-            roomPrice: roomDetails ? roomDetails.price : 0,
+        } else {
+            // Lógica para seleccionar inicio y fin de una nueva reserva
+            const clickedDate = new Date(this.currentYear, this.currentMonthIndex, day);
             
-            // Usamos los datos de la reserva existente o valores por defecto para NUEVA RESERVA
-            startDate: existingBooking ? existingBooking.start_date : formattedDate,
-            // Para una nueva reserva, la fecha de fin la dejamos vacía para que el usuario la elija
-            endDate: existingBooking ? existingBooking.end_date : '', 
-            clientName: existingBooking ? existingBooking.client_name : '',
-            status: existingBooking ? existingBooking.status : 'reserved', // Nueva reserva por defecto es 'reserved'
-            pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price,
-
-            bookingId: existingBooking ? existingBooking.id : null // null para nueva reserva
-        };
-
-        document.dispatchEvent(new CustomEvent('open-booking-modal', {
-            detail: eventDetail
-        }));
+            if (this.selectedStartDate && this.selectedRoomId === roomId) {
+                // Segundo clic: Fin de la reserva
+                const endDate = clickedDate;
+                if (endDate > this.selectedStartDate) {
+                    // Disparamos evento para que el componente padre muestre el formulario de nueva reserva
+                    document.dispatchEvent(new CustomEvent('create-booking', {
+                        detail: {
+                            roomId: roomId,
+                            startDate: this.selectedStartDate.toISOString().split('T')[0],
+                            endDate: endDate.toISOString().split('T')[0]
+                        }
+                    }));
+                }
+                // Limpiamos la selección
+                this.clearSelection();
+            } else {
+                // Primer clic: Inicio de la reserva
+                this.clearSelection();
+                this.selectedRoomId = roomId;
+                this.selectedStartDate = clickedDate;
+                cell.classList.add('selected-start');
+            }
+        }
     }
-// ...
 
-} 
-// Asegúrate de que customElements.define('room-planner', RoomPlanner); esté al final del archivo si no lo estaba
+    clearSelection() {
+        // Elimina la clase 'selected-start' de todas las celdas previamente seleccionadas
+        this.shadowRoot.querySelectorAll('.selected-start').forEach(c => c.classList.remove('selected-start'));
+        this.selectedRoomId = null;
+        this.selectedStartDate = null;
+    }
+}
+
 customElements.define('room-planner', RoomPlanner);
-

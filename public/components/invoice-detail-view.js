@@ -183,14 +183,14 @@ class InvoiceDetailView extends HTMLElement {
         // Iteramos sobre los detalles (que vienen parseados de JSON)
         // Estadia:
         const stayRow = document.createElement('tr');
-        stayRow.innerHTML = `<td>${invoice.details.stay.description}</td><td class="text-right">$${invoice.details.stay.amount.toFixed(2)}</td>`;
+        stayRow.innerHTML = `<td>${invoice.details.stay.description}</td><td class="text-right">$${parseFloat(invoice.details.stay.amount).toFixed(2)}</td>`;
         tbody.appendChild(stayRow);
         subtotal += invoice.details.stay.amount;
 
         // Consumos:
         invoice.details.consumptions.forEach(item => {
             const row = document.createElement('tr');
-            row.innerHTML = `<td>Consumo: ${item.description}</td><td class="text-right">$${item.amount.toFixed(2)}</td>`;
+            row.innerHTML = `<td>Consumo: ${item.description}</td><td class="text-right">$${parseFloat(item.amount).toFixed(2)}</td>`;
             tbody.appendChild(row);
             subtotal += item.amount;
         });
@@ -201,9 +201,9 @@ class InvoiceDetailView extends HTMLElement {
         const vatAmount = subtotal * vatRate;
         const total = subtotal + vatAmount;
 
-        this.shadowRoot.getElementById('subtotalAmount').textContent = subtotal.toFixed(2);
-        this.shadowRoot.getElementById('vatAmount').textContent = vatAmount.toFixed(2);
-        this.shadowRoot.getElementById('totalAmount').textContent = total.toFixed(2);
+        this.shadowRoot.getElementById('subtotalAmount').textContent = parseFloat(subtotal).toFixed(2);
+        this.shadowRoot.getElementById('vatAmount').textContent = parseFloat(vatAmount).toFixed(2);
+        this.shadowRoot.getElementById('totalAmount').textContent = parseFloat(total).toFixed(2);
     }
 }
 

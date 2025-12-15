@@ -33,7 +33,7 @@ async function setupDatabase() {
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'standard',
-            price REAL NOT NULL DEFAULT 0.0,
+            price NUMERIC NOT NULL DEFAULT 0.0,
             -- NUEVO: Estado de limpieza (clean, dirty, servicing)
             clean_status TEXT NOT NULL DEFAULT 'clean' 
         )`);
@@ -44,7 +44,7 @@ async function setupDatabase() {
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
             status TEXT NOT NULL,
-            price_per_night REAL NOT NULL
+            price_per_night NUMERIC NOT NULL
         )`);
         // NUEVO: Tabla de usuarios
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -56,7 +56,7 @@ async function setupDatabase() {
             id SERIAL PRIMARY KEY,
             booking_id INTEGER NOT NULL,
             description TEXT NOT NULL,
-            amount REAL NOT NULL, -- El importe del consumo
+            amount NUMERIC NOT NULL, -- El importe del consumo
             date DATE NOT NULL
         )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS invoices (
@@ -64,7 +64,7 @@ async function setupDatabase() {
             booking_id INTEGER NOT NULL UNIQUE, -- Una factura por reserva
             invoice_number TEXT NOT NULL UNIQUE, -- Número de factura único (ej. A0001-000001)
             issue_date DATE NOT NULL,
-            total_amount REAL NOT NULL,
+            total_amount NUMERIC NOT NULL,
             details TEXT, -- Un campo JSON o texto para guardar los detalles de la línea (estadia y consumos)
             payment_method TEXT NOT NULL DEFAULT 'Contado', 
             FOREIGN KEY(booking_id) REFERENCES bookings(id)
@@ -74,7 +74,7 @@ async function setupDatabase() {
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'Operador',
-            monthly_salary REAL NOT NULL
+            monthly_salary NUMERIC NOT NULL
         );`);
 
         await pool.query(`CREATE TABLE IF NOT EXISTS shifts (
@@ -89,7 +89,7 @@ async function setupDatabase() {
         await pool.query(`CREATE TABLE IF NOT EXISTS expenses (
             id SERIAL PRIMARY KEY,
             description TEXT NOT NULL,
-            amount REAL NOT NULL,
+            amount NUMERIC NOT NULL,
             date DATE NOT NULL,
             category TEXT NOT NULL -- Ej: 'Servicios', 'Impuestos', 'Limpieza', 'Minibar'
         );

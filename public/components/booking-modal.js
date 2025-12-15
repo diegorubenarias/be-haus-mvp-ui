@@ -229,7 +229,7 @@ class BookingModal extends HTMLElement {
         
         // Usamos el precio de la reserva si existe, sino el precio base de la habitacion
         this.currentPricePerNight = data.pricePerNight || this.currentRoomPrice;
-        this.shadow.getElementById('pricePerNight').value = this.currentPricePerNight.toFixed(2);
+        this.shadow.getElementById('pricePerNight').value = parseFloat(this.currentPricePerNight).toFixed(2);
 
 
         // Ocultar todos los botones de acción dinámicos por defecto
@@ -374,7 +374,7 @@ class BookingModal extends HTMLElement {
                 div.classList.add('consumption-item');
                 div.innerHTML = `
                     <span>${item.description}</span>
-                    <span>$${item.amount.toFixed(2)}</span>
+                    <span>$${parseFloat(item.amount).toFixed(2)}</span>
                 `;
                 list.appendChild(div);
                 consumptionsTotal += item.amount; // Sumamos al total
@@ -412,7 +412,7 @@ class BookingModal extends HTMLElement {
 
         // Actualizamos los elementos visuales del modal con los nuevos valores calculados
         this.shadow.getElementById('stayDuration').textContent = `${durationDays} noches`;
-        this.shadow.getElementById('stayCost').textContent = stayCost.toFixed(2);
+        this.shadow.getElementById('stayCost').textContent = parseFloat(stayCost).toFixed(2);
         
         // Llamamos a esta función para asegurarnos de que el total final se actualice, 
         // sumando cualquier consumo que ya esté listado.
@@ -465,7 +465,7 @@ class BookingModal extends HTMLElement {
          
          // Ahora suma correctamente ambos valores
          const total = stayCost + consumptionsTotal;
-         this.shadow.getElementById('totalAmountDisplay').textContent = total.toFixed(2);
+         this.shadow.getElementById('totalAmountDisplay').textContent = parseFloat(total).toFixed(2);
     }
 }
 

@@ -63,7 +63,7 @@ class ExpensesDashboard extends HTMLElement {
                 <td>${expense.date}</td>
                 <td>${expense.description}</td>
                 <td>${expense.category}</td>
-                <td>$${expense.amount.toFixed(2)}</td>
+                <td>$${parseFloat(expense.amount).toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
         });

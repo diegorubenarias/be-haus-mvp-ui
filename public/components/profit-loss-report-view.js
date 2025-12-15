@@ -65,19 +65,18 @@ class ProfitLossReportView extends HTMLElement {
         tbody.innerHTML = '';
 
         // Renderizar ingresos
-        tbody.innerHTML += `<tr><td>Ingresos por Facturación</td><td>$${data.invoicesTotal.toFixed(2)}</td></tr>`;
+        tbody.innerHTML += `<tr><td>Ingresos por Facturación</td><td>$${parseFloat(data.invoicesTotal).toFixed(2)}</td></tr>`;
         
         // Renderizar costos
-        tbody.innerHTML += `<tr><td>Gastos Operativos (Minibar, Limpieza, Servicios)</td><td>$${data.expensesTotal.toFixed(2)}</td></tr>`;
-        tbody.innerHTML += `<tr><td>Sueldos Empleados</td><td>$${data.salariesTotal.toFixed(2)}</td></tr>`;
+        tbody.innerHTML += `<tr><td>Gastos Operativos (Minibar, Limpieza, Servicios)</td><td>$${parseFloat(data.expensesTotal.toFixed(2))}</td></tr>`;
+        tbody.innerHTML += `<tr><td>Sueldos Empleados</td><td>$${parseFloat(data.salariesTotal).toFixed(2)}</td></tr>`;
         
         // Total Costos
         const totalCosts = data.expensesTotal + data.salariesTotal;
-        tbody.innerHTML += `<tr class="total-row"><td>Total Costos</td><td>$${totalCosts.toFixed(2)}</td></tr>`;
-
+        tbody.innerHTML += `<tr class="total-row"><td>Total Costos</td><td>$${parseFloat(totalCosts).toFixed(2)}</td></tr>`;
         // Resumen de Ganancia
         const profitSummary = this.shadowRoot.getElementById('profitSummary');
-        profitSummary.innerHTML = `<h3>Ganancia Neta: $<span id="profitAmount">${data.profit.toFixed(2)}</span></h3>`;
+        profitSummary.innerHTML = `<h3>Ganancia Neta: $<span id="profitAmount">${parseFloat(data.profit).toFixed(2)}</span></h3>`;
         
         const profitAmountSpan = this.shadowRoot.getElementById('profitAmount');
         if (data.profit >= 0) {
