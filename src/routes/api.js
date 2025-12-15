@@ -12,9 +12,31 @@ router.use(authenticateMiddleware);
 // --- Endpoints de habitaciones y reservas ---
 
 // Endpoint para obtener todas las habitaciones
+// src/routes/api.js (Actualiza este endpoint con el código a continuación)
+
+// Endpoint para obtener todas las habitaciones (MODIFICADO CON ORDEN PERSONALIZADO)
 router.get('/rooms', async (req, res) => {
     try {
-        const rooms = await Room.findAll();
+        // Usamos una consulta cruda para un ordenamiento complejo y específico:
+        // 1. Prioriza las habitaciones cuyo nombre empieza por 'BeH' (1 = BeH, 0 = Otros)
+        // 2. Ordena las habitaciones BeH numéricamente si es posible, o alfabéticamente si no.
+        // 3. El resto de habitaciones se listan a continuación.
+
+        const rooms = await sequelize.query(
+            `SELECT * FROM rooms 
+             ORDER BY 
+                 CASE 
+                     WHEN name LIKE 'BeH%' THEN 0 
+                     ELSE 1 
+                 END,
+                 name ASC;`, // Orden alfabético ascendente para ordenar por número de habitación
+            {
+                model: Room, // Mapea los resultados de vuelta al modelo Room de Sequelize
+                mapToModel: true,
+                type: sequelize.QueryTypes.SELECT
+            }
+        );
+
         res.json({
             message: "success",
             data: rooms
@@ -23,6 +45,7 @@ router.get('/rooms', async (req, res) => {
         res.status(400).json({"error": err.message});
     }
 });
+
 
 // Endpoint para obtener todas las reservas
 router.get('/bookings', async (req, res) => {
