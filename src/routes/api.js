@@ -605,11 +605,6 @@ router.put('/user/password', async (req, res) => {
     }
 });
 
-// src/routes/api.js (Añadir al final del archivo)
-
-// --- Endpoints de Clientes (Clients) (NUEVO) ---
-
-// Listar todos los clientes
 router.get('/clients', async (req, res) => {
     try {
         const clients = await Client.findAll({ order: [['name', 'ASC']] });
@@ -670,6 +665,89 @@ router.delete('/clients/:id', async (req, res) => {
     } catch (err) {
         // En un sistema real, deberías prevenir la eliminación si el cliente tiene reservas asociadas.
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Middleware de permisos: Solo permite el acceso a usuarios con rol 'admin' o 'supervisor'
+const authorizeRoles = (roles) => (req, res, next) => {
+    // req.user debe ser seteado por tu authenticateMiddleware
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ message: 'Acceso denegado. Permisos insuficientes.' });
+    }
+    next();
+};
+
+
+// --- READ: Obtener todos los usuarios (Solo Admin/Supervisor) ---
+router.get('/users/', authorizeRoles(['admin', 'supervisor']), async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'username', 'email', 'role', 'is_active'] // Nunca enviar passwords aquí
+        });
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- CREATE: Crear un nuevo usuario (Solo Admin/Supervisor) ---
+router.post('/users/', authorizeRoles(['admin', 'supervisor']), async (req, res) => {
+    const { username, email, password, role } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const newUser = await User.create({
+            username,
+            email,
+            password: hashedPassword,
+            role: role || 'operador'
+        });
+
+        res.status(201).json({ 
+            id: newUser.id, username: newUser.username, email: newUser.email, role: newUser.role 
+        });
+
+    } catch (error) {
+        res.status(400).json({ error: 'Error al crear usuario. El email/username podría estar duplicado.' });
+    }
+});
+
+
+// --- UPDATE: Actualizar rol/estado (Solo Admin/Supervisor) ---
+router.put('/users/:id', authorizeRoles(['admin', 'supervisor']), async (req, res) => {
+    const { email, role, is_active } = req.body;
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (user) {
+            // Validaciones básicas para evitar que un admin se quite permisos a sí mismo si es el único
+            user.email = email !== undefined ? email : user.email;
+            user.role = role !== undefined ? role : user.role;
+            user.is_active = is_active !== undefined ? is_active : user.is_active;
+            
+            await user.save();
+            res.status(200).json({ message: 'Usuario actualizado con éxito' });
+
+        } else {
+            res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// --- DELETE: Desactivar usuario (Solo Admin/Supervisor) ---
+router.delete('/users/:id', authorizeRoles(['admin', 'supervisor']), async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (user) {
+            user.is_active = false; // Borrado suave
+            await user.save();
+            res.status(200).json({ message: 'Usuario desactivado con éxito' });
+        } else {
+            res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 

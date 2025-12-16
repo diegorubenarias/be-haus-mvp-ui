@@ -42,10 +42,13 @@ async function seedDatabase() {
     // Seed Users
     const userCount = await User.count();
     if (userCount === 0) {
-        const passwordTextoPlano = '1234';
+        const passwordTextoPlano = '123456';
         const hashedPassword = await bcrypt.hash(passwordTextoPlano, 10);
-        await User.create({ username: 'admin', password: hashedPassword });
-        console.log("Usuario inicial 'admin'/'1234' insertado.");
+        await User.bulkCreate([
+            { username: 'admin@behaus.com', password: hashedPassword, role: 'admin' },
+            { username: 'operador@behaus.com', password: hashedPassword, role: 'operador' }
+        ]);
+        console.log("Usuarios iniciales insertados.");
     }
 
     // Seed Employees

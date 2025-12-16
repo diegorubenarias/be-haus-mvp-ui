@@ -35,11 +35,36 @@ const Booking = sequelize.define('Booking', {
     price_per_night: { type: DataTypes.REAL, allowNull: false, defaultValue: 0.0 }
 }, { tableName: 'bookings', timestamps: false });
 
+// src/models/index.js (Modificado)
+
+// ... otras definiciones de modelos ...
+
 const User = sequelize.define('User', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     username: { type: DataTypes.TEXT, allowNull: false, unique: true },
-    password: { type: DataTypes.TEXT, allowNull: false }
+    email: { // Añadimos email como identificador adicional
+        type: DataTypes.TEXT,
+        allowNull: true, // Puede ser nulo por ahora si no todos lo tienen
+        unique: true,
+        validate: { isEmail: true }
+    },
+    password: { type: DataTypes.TEXT, allowNull: false },
+    role: { // Campo para definir el rol del usuario
+        type: DataTypes.TEXT,
+        allowNull: false,
+        defaultValue: 'operador', // Rol por defecto
+        validate: {
+            isIn: [['admin', 'supervisor', 'operador']] // Roles permitidos
+        }
+    },
+    is_active: { // Para el "Baja" lógica del ABM (borrado suave)
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    }
 }, { tableName: 'users', timestamps: false });
+
+// ... el resto de relaciones y exportaciones ...
 
 const Consumption = sequelize.define('Consumption', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },

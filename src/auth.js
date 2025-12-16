@@ -27,7 +27,14 @@ async function handleLogin(req, res) {
             if (result) {
                 // Contraseña correcta
                 res.cookie('user_id', user.id, { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 });
-                res.status(200).json({ message: "Login exitoso", user: { id: user.id, username: user.username } });
+                  res.status(200).json({ 
+                    message: "Login exitoso", 
+                    user: { 
+                        id: user.id, 
+                        username: user.username,
+                        role: user.role // <-- Asegúrate que esta línea esté aquí
+                    } 
+                });
             } else {
                 // Contraseña incorrecta
                 res.status(401).json({ error: "Usuario o contraseña incorrectos" });

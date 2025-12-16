@@ -111,6 +111,8 @@ class LoginForm extends HTMLElement {
             });
 
             if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('userRole', data.user.role); 
                 window.location.href = '/dashboard';
             } else {
                 const errorData = await response.json();

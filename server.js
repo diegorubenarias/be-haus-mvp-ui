@@ -42,6 +42,9 @@ app.get('/dashboard', authenticateMiddleware, (req, res) => {
 app.get('/clients.html', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'clients.html'));
 });
+app.get('/users-abm.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'clients.html'));
+});
 
 // ----------------------------------------
 app.use('/api', apiRoutes);
