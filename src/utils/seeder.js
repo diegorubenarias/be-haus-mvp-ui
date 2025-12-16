@@ -40,6 +40,7 @@ async function seedDatabase() {
     }
 
     // Seed Users
+    await User.truncate(); // Limpiamos la tabla de usuarios para evitar duplicados en desarrollo
     const userCount = await User.count();
     if (userCount === 0) {
         const passwordTextoPlano = '123456';
