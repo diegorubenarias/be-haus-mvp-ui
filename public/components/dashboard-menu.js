@@ -118,6 +118,7 @@ class DashboardMenu extends HTMLElement {
                             <a href="#"><span class="icon">⚙️</span> Configuración</a>
                             <ul class="submenu">
                                 <li><a href="/prices.html">Precios y Tarifas</a></li>
+                                <li><a href="/clients.html">Administrar Clientes</a></li>
                                 <li><a href="/employees.html">Gestión Empleados</a></li>
                                 <li><a href="/shifts-planner.html">Planificador Turnos</a></li>
                                 <li><a href="/settings.html">Ajustes Cuenta</a></li>

@@ -20,12 +20,27 @@ class ShiftsPlannerView extends HTMLElement {
             <style>
                 .planner-container { overflow-x: auto; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 4px; }
                 .planner-grid { display: grid; border-collapse: collapse; width: max-content; }
-                .cell { border: 1px solid #e0e0e0; padding: 8px 5px; text-align: center; min-height: 20px; box-sizing: border-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-                .header-cell { background-color: #0056b3; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+                .cell { border: 1px solid #e0e0e0; padding: 4px 5px; text-align: center; min-height: 20px; box-sizing: border-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+                
+                .header-cell { background-color: #0056b3; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; padding: 8px 5px; }
+                .header-day-letter { font-size: 0.7em; display: block; margin-bottom: 3px; }
+
                 .employee-header { background-color: #f9f9f9; color: #333; text-align: left; font-weight: normal; position: sticky; left: 0; z-index: 5; }
-                .weekend-cell { background-color: #f0f0f0 !important; color: #555; }
-                .weekend-header { background-color: #004494 !important; }
-                /* Clases de colores para turnos */
+                
+                /* CAMBIO 1: El fondo de la celda de fin de semana es más claro */
+                .weekend-cell { background-color: #f0f0f0 !important; }
+
+                /* CAMBIO 2: Aplicamos color de texto oscuro a weekend-cell y usamos !important para asegurar */
+                /* Esto hace que el texto sea oscuro incluso si es un turno N (Noche, que por defecto es blanco) */
+                .weekend-cell.shift-N { color: #333333 !important; }
+
+                /* CAMBIO 3: Fondo de fin de semana más claro y texto oscuro para la cabecera */
+                .weekend-header { 
+                    background-color: #a0a0a0 !important;
+                    color: #333333 !important; 
+                } 
+
+                /* Clases de colores para turnos (Noche y Franco tienen texto blanco por defecto) */
                 .shift-M { background-color: #ffeb3b; }
                 .shift-T { background-color: #ff9800; }
                 .shift-N { background-color: #607d8b; color: white; }
@@ -34,7 +49,7 @@ class ShiftsPlannerView extends HTMLElement {
 
                 .month-selector { padding: 10px; background-color: #e9e9e9; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
                 .nav-button { background: #0056b3; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-                .legend { margin-top: 10px; font-size: 0.8em; }
+                .legend { margin-top: 10px; font-size: 0.8em; padding: 0 10px; }
             </style>
             <div class="month-selector">
                 <button class="nav-button" id="prevMonth">&lt; Anterior</button>
@@ -55,10 +70,11 @@ class ShiftsPlannerView extends HTMLElement {
         `;
     }
 
-    async connectedCallback() {
+    connectedCallback() {
+        // ... (El resto del JS permanece igual)
         this.shadowRoot.getElementById('prevMonth').addEventListener('click', () => this.navigateMonth(-1));
         this.shadowRoot.getElementById('nextMonth').addEventListener('click', () => this.navigateMonth(1));
-        await this.fetchDataAndRender();
+        this.fetchDataAndRender();
         this.shadowRoot.getElementById('plannerGrid').addEventListener('click', (event) => this.handleGridClick(event));
     }
 
@@ -81,7 +97,6 @@ class ShiftsPlannerView extends HTMLElement {
         const shiftsData = await shiftsRes.json();
         
         this.employees = employeesData.data; 
-        // Mapeamos los turnos a un objeto para fácil acceso: { 'empId-YYYY-MM-DD': 'Type' }
         this.shifts = {};
         shiftsData.data.forEach(s => {
             this.shifts[`${s.employee_id}-${s.shift_date}`] = s.shift_type;
@@ -90,8 +105,14 @@ class ShiftsPlannerView extends HTMLElement {
 
     navigateMonth(offset) {
         this.currentViewDate.setMonth(this.currentViewDate.getMonth() + offset);
-        this.fetchDataAndRender(); // Fetch de nuevos turnos para el mes
+        this.fetchDataAndRender();
     }
+    
+    getDayLetter(dayIndex) {
+        const letters = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+        return letters[dayIndex];
+    }
+
 
     renderView() {
         const year = this.currentViewDate.getFullYear();
@@ -103,38 +124,47 @@ class ShiftsPlannerView extends HTMLElement {
         grid.innerHTML = '';
         this.shadowRoot.querySelector('.planner-grid').style.gridTemplateColumns = `150px repeat(${daysInMonth}, 40px)`;
 
-        // Encabezados de días y fines de semana
-        let dayOfWeek = new Date(year, monthIndex, 1).getDay();
-        grid.innerHTML += `<div class="cell header-cell employee-header">Empleado/Rol</div>`; 
         for (let i = 1; i <= daysInMonth; i++) {
+            const date = new Date(year, monthIndex, i);
+            const dayOfWeek = date.getDay(); 
+
+            if (i === 1) { 
+                 grid.innerHTML += `<div class="cell header-cell employee-header">Empleado/Rol</div>`; 
+            }
+            
             const headerCell = document.createElement('div');
             headerCell.classList.add('cell', 'header-cell');
             if (dayOfWeek === 0 || dayOfWeek === 6) { headerCell.classList.add('weekend-header'); }
-            headerCell.textContent = i;
+            
+            headerCell.innerHTML = `
+                <span class="header-day-letter">${this.getDayLetter(dayOfWeek)}</span>
+                <span>${i}</span>
+            `;
+
             grid.appendChild(headerCell);
-            dayOfWeek = (dayOfWeek + 1) % 7; 
         }
         
-        // Celdas de turnos
         this.employees.forEach(employee => {
             grid.innerHTML += `<div class="cell employee-header" data-employee-id="${employee.id}">${employee.name} (${employee.role})</div>`;
             for (let i = 1; i <= daysInMonth; i++) {
                 const cell = document.createElement('div');
                 cell.classList.add('cell');
-                if (new Date(year, monthIndex, i).getDay() === 0 || new Date(year, monthIndex, i).getDay() === 6) { cell.classList.add('weekend-cell'); }
+                
+                const date = new Date(year, monthIndex, i);
+                if (date.getDay() === 0 || date.getDay() === 6) { cell.classList.add('weekend-cell'); }
 
                 const dateString = `${year}-${(monthIndex + 1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`;
                 const shiftType = this.shifts[`${employee.id}-${dateString}`];
                 
                 cell.dataset.employeeId = employee.id;
                 cell.dataset.date = dateString;
-                cell.dataset.shiftType = shiftType || 'F'; // Default Franco
+                cell.dataset.shiftType = shiftType || 'F';
 
                 if (shiftType) {
-                    cell.textContent = shiftType; // M, T, N, S, F
+                    cell.textContent = shiftType; 
                     cell.classList.add(`shift-${shiftType}`);
                 } else {
-                    cell.textContent = 'F'; // Default Franco visual
+                    cell.textContent = 'F'; 
                     cell.classList.add('shift-F');
                 }
                 grid.appendChild(cell);
@@ -142,7 +172,6 @@ class ShiftsPlannerView extends HTMLElement {
         });
     }
 
-    // Maneja clic en celda para cambiar/asignar turno
     async handleGridClick(event) {
         let cell = event.target;
         if (!cell.classList.contains('cell') || cell.classList.contains('header-cell') || cell.classList.contains('employee-header')) return;
@@ -151,31 +180,28 @@ class ShiftsPlannerView extends HTMLElement {
         const date = cell.dataset.date;
         const currentShift = cell.dataset.shiftType;
 
-        // Lógica simple para rotar entre turnos al hacer clic (M -> T -> N -> S -> F -> M)
         const types = Object.keys(this.shiftTypes);
         const currentIndex = types.indexOf(currentShift);
         const nextIndex = (currentIndex + 1) % types.length;
         const nextShiftType = types[nextIndex];
+        
+        cell.textContent = nextShiftType;
+        Object.keys(this.shiftTypes).forEach(type => cell.classList.remove(`shift-${type}`));
+        cell.classList.add(`shift-${nextShiftType}`);
+        cell.dataset.shiftType = nextShiftType;
 
-        // Guardar el nuevo turno via API
-        const response = await fetch('/api/shifts', {
-            method: 'POST', // Usamos POST con INSERT OR REPLACE
+        await fetch('/api/shifts', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ employee_id: employeeId, shift_date: date, shift_type: nextShiftType })
+            body: JSON.stringify({ 
+                employee_id: employeeId, 
+                shift_date: date, 
+                shift_type: nextShiftType 
+            })
         });
-
-        if (response.ok) {
-            // Actualizar la UI inmediatamente tras guardar
-            cell.classList.remove(`shift-${currentShift}`);
-            cell.classList.add(`shift-${nextShiftType}`);
-            cell.textContent = nextShiftType;
-            cell.dataset.shiftType = nextShiftType;
-            // Actualizar el mapa interno de shifts para consistencia
-            this.shifts[`${employeeId}-${date}`] = nextShiftType;
-
-        } else {
-            alert("Error al guardar el turno.");
-        }
+        
+        this.shifts[`${employeeId}-${date}`] = nextShiftType;
+        console.log(`Turno para empleado ${employeeId} en ${date} cambiado a ${nextShiftType}`);
     }
 }
 

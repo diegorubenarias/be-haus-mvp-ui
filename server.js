@@ -39,9 +39,9 @@ app.get('/', (req, res) => {
 app.get('/dashboard', authenticateMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
-
-// ... (todas tus otras rutas app.get('/planner.html', ...) siguen aquí) ...
-
+app.get('/clients.html', authenticateMiddleware, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'clients.html'));
+});
 
 // ----------------------------------------
 app.use('/api', apiRoutes);

@@ -15,7 +15,20 @@ const Room = sequelize.define('Room', {
 const Booking = sequelize.define('Booking', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     room_id: { type: DataTypes.INTEGER, allowNull: false },
-    client_name: { type: DataTypes.TEXT, allowNull: false },
+    
+    // Mantenemos client_name para clientes individuales o el nombre del contacto
+    client_name: { type: DataTypes.TEXT, allowNull: false }, 
+
+    // client_id ahora es OPCIONAL (allowNull: true por defecto)
+    client_id: { 
+        type: DataTypes.INTEGER,
+        allowNull: true, // Importante: Permitir valores NULL
+        references: {
+            model: 'clients',
+            key: 'id',
+        }
+    },
+
     start_date: { type: DataTypes.TEXT, allowNull: false }, 
     end_date: { type: DataTypes.TEXT, allowNull: false },
     status: { type: DataTypes.TEXT, allowNull: false },
@@ -68,6 +81,20 @@ const Expense = sequelize.define('Expense', {
     category: { type: DataTypes.TEXT, allowNull: false },
 }, { tableName: 'expenses', timestamps: false });
 
+const Client = sequelize.define('Client', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.TEXT, allowNull: false },
+    cuit_cuil: { type: DataTypes.TEXT, allowNull: false, unique: true }, // CUIT/CUIL único
+    invoice_type: { 
+        type: DataTypes.TEXT, 
+        allowNull: false, 
+        defaultValue: 'B',
+        validate: {
+            isIn: [['A', 'B', 'C', 'T']] // Validación para asegurar tipos válidos
+        }
+    }
+}, { tableName: 'clients', timestamps: false });
+
 
 // --- Definición de Relaciones (Foreign Keys) ---
 Booking.belongsTo(Room, { foreignKey: 'room_id' });
@@ -78,6 +105,8 @@ Invoice.belongsTo(Booking, { foreignKey: 'booking_id' });
 Booking.hasOne(Invoice, { foreignKey: 'booking_id' });
 Shift.belongsTo(Employee, { foreignKey: 'employee_id' });
 Employee.hasMany(Shift, { foreignKey: 'employee_id' });
+Booking.belongsTo(Client, { foreignKey: 'client_id' });
+Client.hasMany(Booking, { foreignKey: 'client_id' });
 
 
 module.exports = {
@@ -89,5 +118,6 @@ module.exports = {
     Invoice,
     Employee,
     Shift,
-    Expense
+    Expense,
+    Client
 };

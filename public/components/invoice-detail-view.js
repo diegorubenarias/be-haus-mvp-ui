@@ -80,8 +80,11 @@ class InvoiceDetailView extends HTMLElement {
                 </div>
 
                 <div class="billing-details">
+                    <!-- Sección de Cliente Expandida -->
                     <div>
                         <strong>Cliente:</strong> <span id="clientName"></span><br>
+                        <strong>CUIT/CUIL:</strong> <span id="clientCuitCuil"></span><br>
+                        <strong>Tipo Factura:</strong> <span id="invoiceTypeDisplay"></span><br>
                         <strong>Estadía:</strong> <span id="stayDates"></span>
                     </div>
                     <div>
@@ -104,7 +107,7 @@ class InvoiceDetailView extends HTMLElement {
                 <div class="total-section">
                     <table>
                         <tr>
-                            <td>Subtotal:</td>
+                            <td>Subtotal Base:</td>
                             <td class="text-right" id="subtotalAmount">0.00</td>
                         </tr>
                         <tr>
@@ -127,7 +130,6 @@ class InvoiceDetailView extends HTMLElement {
 
     connectedCallback() {
         this.shadowRoot.getElementById('printButton').addEventListener('click', () => window.print());
-        // Obtener el ID de la URL (ej: ?id=1)
         const urlParams = new URLSearchParams(window.location.search);
         const invoiceId = urlParams.get('id');
         if (invoiceId) {
@@ -139,7 +141,7 @@ class InvoiceDetailView extends HTMLElement {
 
     async fetchInvoiceDetails(invoiceId) {
         try {
-            // Usamos el endpoint que creamos: GET /api/invoices/:id
+            // SOLO USAMOS ESTE ENDPOINT. El backend ya se encarga de dar todos los datos.
             const response = await fetch(`/api/invoices/${invoiceId}`);
             if (response.status === 404) {
                 this.shadowRoot.getElementById('invoiceNumber').textContent = 'Factura no encontrada.';
@@ -147,18 +149,8 @@ class InvoiceDetailView extends HTMLElement {
             }
             const invoice = await response.json();
             
-             // Fetcheamos ahora usando el nuevo endpoint específico /api/bookings/:id
-            const bookingResponse = await fetch(`/api/bookings/${invoice.booking_id}`);
-            
-            if (bookingResponse.status === 404) {
-                 throw new Error("Datos de reserva no encontrados.");
-            }
-            
-            const bookingData = await bookingResponse.json();
-            // CLAVE: bookingData.data es ahora el objeto de reserva directamente
-            const booking = bookingData.data; 
-
-            this.renderInvoice(invoice, booking);
+            // Renderizamos la factura usando solo el objeto invoice que ya tiene todo
+            this.renderInvoice(invoice);
 
         } catch (error) {
             console.error("Error fetching invoice details:", error);
@@ -166,44 +158,57 @@ class InvoiceDetailView extends HTMLElement {
         }
     }
 
-    renderInvoice(invoice, booking) {
+    renderInvoice(invoice) {
+        // ... (detalles principales y datos fiscales) ...
         this.shadowRoot.getElementById('invoiceNumber').textContent = invoice.invoice_number;
         this.shadowRoot.getElementById('issueDate').textContent = invoice.issue_date;
         this.shadowRoot.getElementById('bookingId').textContent = invoice.booking_id;
-        this.shadowRoot.getElementById('clientName').textContent = booking.client_name;
-        this.shadowRoot.getElementById('stayDates').textContent = `${booking.start_date} al ${booking.end_date}`;
-         // MOSTRAR EL NUEVO MÉTODO DE PAGO
         this.shadowRoot.getElementById('paymentMethod').textContent = invoice.payment_method; 
        
+        if (invoice.details && invoice.details.clientDetails) {
+            this.shadowRoot.getElementById('clientName').textContent = invoice.details.clientDetails.name;
+            this.shadowRoot.getElementById('clientCuitCuil').textContent = invoice.details.clientDetails.cuit_cuil;
+            this.shadowRoot.getElementById('invoiceTypeDisplay').textContent = invoice.details.clientDetails.invoice_type;
+        } else {
+            this.shadowRoot.getElementById('clientName').textContent = 'N/A';
+        }
         
-        const tbody = this.shadowRoot.getElementById('invoiceItems');
+        // CLAVE: Extraer la duración de la descripción de la estadía
+        if (invoice.details && invoice.details.stay && invoice.details.stay.description) {
+             this.shadowRoot.getElementById('stayDuration').textContent = invoice.details.stay.description; // Ej: "Estadía 3 noches"
+        }
+
+ const tbody = this.shadowRoot.getElementById('invoiceItems');
         tbody.innerHTML = '';
         let subtotal = 0;
 
-        // Iteramos sobre los detalles (que vienen parseados de JSON)
-        // Estadia:
-        const stayRow = document.createElement('tr');
-        stayRow.innerHTML = `<td>${invoice.details.stay.description}</td><td class="text-right">$${invoice.details.stay.amount.toFixed(2)}</td>`;
-        tbody.appendChild(stayRow);
-        subtotal += invoice.details.stay.amount;
+        if (invoice.details.stay) {
+            const stayRow = document.createElement('tr');
+            stayRow.innerHTML = `<td>${invoice.details.stay.description}</td><td class="text-right">$${invoice.details.stay.amount.toFixed(2)}</td>`;
+            tbody.appendChild(stayRow);
+            subtotal += invoice.details.stay.amount;
+        }
 
-        // Consumos:
-        invoice.details.consumptions.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `<td>Consumo: ${item.description}</td><td class="text-right">$${item.amount.toFixed(2)}</td>`;
-            tbody.appendChild(row);
-            subtotal += item.amount;
-        });
-
-        // Calculamos el IVA y el total final (replicamos la lógica del backend/modal)
+        if (invoice.details.consumptions) {
+            invoice.details.consumptions.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>Consumo: ${item.description}</td><td class="text-right">$${item.amount.toFixed(2)}</td>`;
+                tbody.appendChild(row);
+                subtotal += item.amount;
+            });
+        }
+        
+        // Calculamos el IVA y el total final (usando el total calculado, no el totalAmount de la DB si queremos mostrar desglose)
         // Para este MVP, el IVA es 21%
         const vatRate = 0.21;
         const vatAmount = subtotal * vatRate;
         const total = subtotal + vatAmount;
 
+        // Mostrar totales calculados
         this.shadowRoot.getElementById('subtotalAmount').textContent = subtotal.toFixed(2);
         this.shadowRoot.getElementById('vatAmount').textContent = vatAmount.toFixed(2);
         this.shadowRoot.getElementById('totalAmount').textContent = total.toFixed(2);
+        
     }
 }
 

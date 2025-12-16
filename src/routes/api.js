@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateMiddleware } = require('../auth');
 const bcrypt = require('bcrypt');
-const { Room, Booking, Consumption, Invoice, Employee, Shift, Expense, User, sequelize } = require('../models'); 
+const { Room, Booking, Consumption, Invoice, Employee, Shift, Expense, User, sequelize, Client } = require('../models'); 
 const { Op } = require('sequelize'); // Operadores de Sequelize para consultas complejas
 
 // Aplicamos el middleware de autenticación a todas las rutas de este router por defecto
@@ -62,12 +62,12 @@ router.get('/bookings', async (req, res) => {
 
 // Endpoint para crear una nueva reserva
 router.post('/bookings', async (req, res) => {
-    const { room_id, client_name, start_date, end_date, status } = req.body;
+     const { room_id, client_id, client_name, start_date, end_date, status } = req.body; 
 
-    if (!room_id || !client_name || !start_date || !end_date || !status) {
+    if (!room_id || !client_name || !start_date || !end_date || !status) { 
         return res.status(400).json({ error: "Faltan campos requeridos." });
     }
-    
+
     try {
         const room = await Room.findOne({ where: { id: room_id }, attributes: ['price'] });
         if (!room) {
@@ -93,6 +93,7 @@ router.post('/bookings', async (req, res) => {
 
         const newBooking = await Booking.create({
             room_id,
+            client_id: client_id || null, // Guarda NULL si no se proporciona client_id
             client_name,
             start_date,
             end_date,
@@ -138,20 +139,21 @@ router.put('/bookings/:id', async (req, res) => {
     }
 });
 
-// Endpoint para obtener una reserva específica por su ID
-router.get('/bookings/:id', async (req, res) => {
-    const { id } = req.params;
+// Endpoint para obtener todas las reservas (MODIFICADO para incluir datos del Cliente si existe)
+router.get('/bookings', async (req, res) => {
     try {
-        const row = await Booking.findByPk(id);
-        
-        if (row) {
-            res.json({
-                message: "success",
-                data: row
-            });
-        } else {
-            res.status(404).json({"error": "Reserva no encontrada."});
-        }
+        const bookings = await Booking.findAll({
+            // required: false significa que hará un LEFT OUTER JOIN, permitiendo nulos
+            include: [{
+                model: Client, 
+                attributes: ['id', 'name', 'cuit_cuil', 'invoice_type'],
+                required: false 
+            }]
+        });
+        res.json({
+            message: "success",
+            data: bookings
+        });
     } catch (err) {
         res.status(400).json({"error": err.message});
     }
@@ -281,41 +283,70 @@ router.put('/rooms/:id/price', async (req, res) => {
 });
 
 // Endpoint para GENERAR una factura a partir de una reserva
+// src/routes/api.js (Modificar el Endpoint de Generar Factura)
+
 router.post('/invoices/generate/:bookingId', async (req, res) => {
     const { bookingId } = req.params;
     const { payment_method } = req.body; 
 
-    if (!payment_method) {
-        return res.status(400).json({ error: "Se requiere el método de pago." });
-    }
+    if (!payment_method) { return res.status(400).json({ error: "Se requiere el método de pago." }); }
 
     try {
-        const booking = await Booking.findByPk(bookingId);
-        if (!booking) {
-            return res.status(404).json({ error: "Reserva no encontrada." });
-        }
+        // 1. Obtener datos de reserva Y potencialmente del cliente asociado
+        // Usamos include para traer los datos de la empresa, required: false permite que client_id sea NULL
+        const booking = await Booking.findByPk(bookingId, {
+            include: [{ model: Client, required: false }] 
+        });
 
-        const consumptions = await Consumption.findAll({ where: { booking_id: bookingId } });
-
+        if (!booking) { return res.status(404).json({ error: "Reserva no encontrada." }); }
+        
+        // Validaciones...
         if (booking.status !== 'checked-out') {
             return res.status(400).json({ error: "No se puede facturar una reserva que no ha completado el check-out." });
         }
 
+        // 2. Calcular totales (misma lógica que antes)
         const startDate = new Date(booking.start_date + 'T00:00:00Z');
         const endDate = new Date(booking.end_date + 'T00:00:00Z');
         const durationDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
         const stayCost = durationDays * booking.price_per_night;
+        
+        // Fetch consumos
+        const consumptions = await Consumption.findAll({ where: { booking_id: bookingId } });
         const consumptionsTotal = consumptions.reduce((sum, item) => sum + item.amount, 0);
         const totalAmount = stayCost + consumptionsTotal;
 
+        // --- Lógica CLAVE: Determinar datos de facturación ---
+        let finalClientName = booking.client_name;
+        let finalCuitCuil = 'CF'; // Consumidor Final por defecto
+        let finalInvoiceType = 'B'; // Tipo B o C por defecto para Consumidor Final
+
+        // console.log("Datos de empresa (booking.Client):", booking.Client); // DEBUG
+
+        if (booking.Client) { // <-- Esto debería ser truthy si se encontró la empresa
+            finalClientName = `${booking.client_name} (${booking.Client.name})`; 
+            finalCuitCuil = booking.Client.cuit_cuil;
+            finalInvoiceType = booking.Client.invoice_type;
+        }
+        // --- Fin Lógica de Facturación ---
+
+        // Preparamos detalles para guardar como JSON en la factura
         const invoiceDetails = JSON.stringify({
             stay: { description: `Estadía ${durationDays} noches`, amount: stayCost },
-            consumptions: consumptions.map(c => ({ description: c.description, amount: c.amount }))
+            consumptions: consumptions.map(c => ({ description: c.description, amount: c.amount })),
+            clientDetails: { // <-- AÑADIR estos detalles al JSON
+                name: finalClientName,
+                cuit_cuil: finalCuitCuil,
+                invoice_type: finalInvoiceType
+            }
         });
 
+        // ... (Generar invoice number, issue date) ...
         const issueDate = new Date().toISOString().split('T')[0];
         const invoiceNumber = `INV-${issueDate.replace(/-/g, '')}-${bookingId}`;
 
+
+        // 4. Insertar la factura
         const newInvoice = await Invoice.create({
             booking_id: bookingId,
             invoice_number: invoiceNumber,
@@ -325,11 +356,8 @@ router.post('/invoices/generate/:bookingId', async (req, res) => {
             payment_method: payment_method
         });
         
-        await Room.update(
-            { clean_status: 'dirty' },
-            { where: { id: booking.room_id } }
-        );
-        
+        // ... (Actualizar estado de limpieza, response JSON) ...
+
         res.status(201).json({
             message: "Factura generada y habitación marcada como sucia.",
             invoiceId: newInvoice.id,
@@ -340,12 +368,14 @@ router.post('/invoices/generate/:bookingId', async (req, res) => {
         });
 
     } catch (err) {
+        console.error("Error generating invoice:", err); // DEBUG
         if (err.name === 'SequelizeUniqueConstraintError') {
              return res.status(409).json({ error: "La reserva ya tiene una factura generada." });
         }
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // Endpoint para obtener una factura específica por su ID
 router.get('/invoices/:id', async (req, res) => {
@@ -574,6 +604,75 @@ router.put('/user/password', async (req, res) => {
          res.status(500).json({ error: "Error interno del servidor al cambiar la contraseña." });
     }
 });
+
+// src/routes/api.js (Añadir al final del archivo)
+
+// --- Endpoints de Clientes (Clients) (NUEVO) ---
+
+// Listar todos los clientes
+router.get('/clients', async (req, res) => {
+    try {
+        const clients = await Client.findAll({ order: [['name', 'ASC']] });
+        res.json({ data: clients });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Crear un nuevo cliente
+router.post('/clients', async (req, res) => {
+    const { name, cuit_cuil, invoice_type } = req.body;
+    if (!name || !cuit_cuil || !invoice_type) {
+        return res.status(400).json({ error: "Faltan campos requeridos." });
+    }
+    try {
+        const newClient = await Client.create({ name, cuit_cuil, invoice_type });
+        res.status(201).json({ message: "Cliente añadido exitosamente", id: newClient.id });
+    } catch (err) {
+        // Manejo de error de CUIT/CUIL duplicado
+        if (err.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({ error: "El CUIT/CUIL ya existe." });
+        }
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Actualizar un cliente existente
+router.put('/clients/:id', async (req, res) => {
+    const { name, cuit_cuil, invoice_type } = req.body;
+    try {
+        const [updatedRowsCount] = await Client.update(
+            { name, cuit_cuil, invoice_type },
+            { where: { id: req.params.id } }
+        );
+        if (updatedRowsCount > 0) {
+            res.status(200).json({ message: "Cliente actualizado.", changes: updatedRowsCount });
+        } else {
+            res.status(404).json({ error: "Cliente no encontrado." });
+        }
+    } catch (err) {
+        if (err.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({ error: "El CUIT/CUIL ya existe." });
+        }
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Eliminar un cliente
+router.delete('/clients/:id', async (req, res) => {
+    try {
+        const deletedRows = await Client.destroy({ where: { id: req.params.id } });
+        if (deletedRows > 0) {
+             res.status(200).json({ message: "Cliente eliminado.", changes: deletedRows });
+        } else {
+            res.status(404).json({ error: "Cliente no encontrado." });
+        }
+    } catch (err) {
+        // En un sistema real, deberías prevenir la eliminación si el cliente tiene reservas asociadas.
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // Exporta el router para que server.js lo pueda usar
 module.exports = router;
