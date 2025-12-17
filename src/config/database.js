@@ -8,7 +8,7 @@ const connectionString = process.env.DATABASE_URL || 'sqlite://hotel_bookings.db
 
 const sequelize = new Sequelize(connectionString, {
     dialect: process.env.DATABASE_URL ? 'postgres' : 'sqlite',
-    logging: false, // Desactiva los logs SQL en consola
+      logging: console.log, 
     dialectOptions: process.env.DATABASE_URL ? {
         ssl: {
             require: true,
