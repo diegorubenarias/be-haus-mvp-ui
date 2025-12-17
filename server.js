@@ -47,7 +47,7 @@ seedDatabase().then(() => {
     
     // --- CAMBIO CLAVE EN app.listen() ---
     app.listen(3000, () => {
-        console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
+        console.log(`Servidor corriendo`);
     });
     // ------------------------------------
 
