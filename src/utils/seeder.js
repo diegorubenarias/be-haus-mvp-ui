@@ -6,7 +6,7 @@ async function seedDatabase() {
     // Usamos { alter: true } en desarrollo para actualizar el esquema sin perder datos
     await sequelize.sync({ alter: true }); 
 
-    // Seed Rooms
+  /*  // Seed Rooms
     const roomCount = await Room.count();
     if (roomCount === 0) {
          const roomsData = [
@@ -60,7 +60,8 @@ async function seedDatabase() {
             { name: 'Maria Garcia', role: 'Recepcionista', monthly_salary: 4500.00 }
         ]);
         console.log("Empleados iniciales insertados.");
-    }
+    }*/
+   console.log("Seed function finished execution.");
 }
 
 module.exports = seedDatabase;
