@@ -20,20 +20,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Iniciar DB y Servidor ---
-seedDatabase().then(() => {
-    console.log("Base de datos sincronizada y sembrada.");
-    
-    // --- CAMBIO CLAVE EN app.listen() ---
-    app.listen(PORT, HOST, () => {
-        console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
-    });
-    // ------------------------------------
-
-}).catch(err => {
-    console.error("Error al iniciar la base de datos:", err);
-});
-
 
 // --- Rutas de Autenticación (Login/Logout no usan el API router) ---
 app.post('/api/login', handleLogin);
@@ -59,3 +45,19 @@ app.get('/users-abm.html', authenticateMiddleware, (req, res) => {
 
 // ----------------------------------------
 app.use('/api', apiRoutes);
+
+
+// --- Iniciar DB y Servidor ---
+seedDatabase().then(() => {
+    console.log("Base de datos sincronizada y sembrada.");
+    
+    // --- CAMBIO CLAVE EN app.listen() ---
+    app.listen(PORT, HOST, () => {
+        console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
+    });
+    // ------------------------------------
+
+}).catch(err => {
+    console.error("Error al iniciar la base de datos:", err);
+});
+
