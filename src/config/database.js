@@ -13,6 +13,12 @@ const sequelize = new Sequelize(connectionString, {
         ssl: {
             require: true,
             rejectUnauthorized: false // A veces necesario en entornos cloud como Railway/Heroku
+        },
+         pool: { // Ajustes de pool para evitar bloqueos silenciosos
+            max: 5,
+            min: 0,
+            acquire: 30000, // 30 segundos para adquirir conexión
+            idle: 10000     // 10 segundos de inactividad
         }
     } : {}
 });
