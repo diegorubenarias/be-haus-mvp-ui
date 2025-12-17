@@ -4,12 +4,6 @@ const path = require('path');
 const cookieParser = require('cookie-parser'); 
 const app = express();
 
-// --- CAMBIOS CLAVE AQUÍ ---
-// 1. Usar process.env.PORT proporcionado por Railway (fallback a 3000 para desarrollo local)
-const PORT = process.env.PORT || 3000;
-// 2. Usar 0.0.0.0 para que el servidor escuche en todas las interfaces de red del contenedor
-const HOST = '0.0.0.0'; 
-// -------------------------
 
 // const db = require('./src/database'); // ELIMINAR
 const seedDatabase = require('./src/utils/seeder'); // Importamos el seeder
@@ -52,7 +46,7 @@ seedDatabase().then(() => {
     console.log("Base de datos sincronizada y sembrada.");
     
     // --- CAMBIO CLAVE EN app.listen() ---
-    app.listen(PORT, HOST, () => {
+    app.listen(3000, () => {
         console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
     });
     // ------------------------------------
