@@ -38,22 +38,30 @@ async function seedDatabase() {
         await Room.bulkCreate(roomsData);
         console.log("Habitaciones iniciales con precios insertadas.");
     }
-
+*/
     // Seed Users
-    //await User.truncate(); // Limpiamos la tabla de usuarios para evitar duplicados en desarrollo
+    await User.truncate(); // Limpiamos la tabla de usuarios para evitar duplicados en desarrollo
     const userCount = await User.count();
     if (userCount === 0) {
         const passwordTextoPlano = '123456';
         const hashedPassword = await bcrypt.hash(passwordTextoPlano, 10);
         await User.bulkCreate([
-            { username: 'admin@behaus.com', password: hashedPassword, role: 'admin' },
-            { username: 'operador@behaus.com', password: hashedPassword, role: 'operador' }
+            { username: 'gabriel.fernandez@behaus.com', password: hashedPassword, role: 'admin' },
+            { username: 'nicolas.perone@behaus.com', password: hashedPassword, role: 'operador' },
+            { username: 'ariel.jofre@behaus.com', password: hashedPassword, role: 'operador' },
+            { username: 'martin.guzman@behaus.com', password: hashedPassword, role: 'operador' },
+            { username: 'jose.basconcelo@behaus.com', password: hashedPassword, role: 'operador' },
+            { username: 'giselle.moreno@behaus.com', password: hashedPassword, role: 'limpieza' },
+            { username: 'dalma.orozco@behaus.com', password: hashedPassword, role: 'limpieza' },
+            { username: 'micaela.cabrera@behaus.com', password: hashedPassword, role: 'limpieza' },
+            
+            
         ]);
         console.log("Usuarios iniciales insertados.");
     }
 
     // Seed Employees
-    const employeeCount = await Employee.count();
+   /* const employeeCount = await Employee.count();
     if (employeeCount === 0) {
         await Employee.bulkCreate([
             { name: 'Juan Perez', role: 'Gerente', monthly_salary: 8000.00 },

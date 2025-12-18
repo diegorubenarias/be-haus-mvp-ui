@@ -202,7 +202,8 @@ class RoomPlanner extends HTMLElement {
             status: existingBooking ? existingBooking.status : 'reserved', // Nueva reserva por defecto es 'reserved'
             pricePerNight: existingBooking ? existingBooking.price_per_night : roomDetails.price,
 
-            bookingId: existingBooking ? existingBooking.id : null // null para nueva reserva
+            bookingId: existingBooking ? existingBooking.id : null, // null para nueva reserva
+            notes: existingBooking ? existingBooking.notes : '' // Notas de la reserva existente o vacío
         };
 
         document.dispatchEvent(new CustomEvent('open-booking-modal', {

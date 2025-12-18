@@ -32,7 +32,10 @@ const Booking = sequelize.define('Booking', {
     start_date: { type: DataTypes.TEXT, allowNull: false }, 
     end_date: { type: DataTypes.TEXT, allowNull: false },
     status: { type: DataTypes.TEXT, allowNull: false },
-    price_per_night: { type: DataTypes.REAL, allowNull: false, defaultValue: 0.0 }
+    price_per_night: { type: DataTypes.REAL, allowNull: false, defaultValue: 0.0 },
+    email: { type: DataTypes.TEXT, allowNull: true },
+    notes: { type: DataTypes.TEXT, allowNull: true },
+
 }, { tableName: 'bookings', timestamps: false });
 
 // src/models/index.js (Modificado)
@@ -71,7 +74,8 @@ const Consumption = sequelize.define('Consumption', {
     booking_id: { type: DataTypes.INTEGER, allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: false },
     amount: { type: DataTypes.REAL, allowNull: false },
-    date: { type: DataTypes.TEXT, allowNull: false }
+    date: { type: DataTypes.TEXT, allowNull: false },
+    
 }, { tableName: 'consumptions', timestamps: false });
 
 const Invoice = sequelize.define('Invoice', {

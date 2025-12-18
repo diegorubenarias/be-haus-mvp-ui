@@ -19,6 +19,11 @@ class BillingConsumptionPanel extends HTMLElement {
                 <p>Estadía Total: <span id="stayDuration">0 noches</span> | Base: $<span id="stayCost">0.00</span></p>
                 <h5>Consumos Adicionales:</h5>
                 <div id="consumptionsList"></div>
+                <div class="form-group">
+                    <input type="text" id="consumptionDescription" placeholder="Descripción (ej: Minibar, Lavandería)">
+                    <input type="number" id="consumptionAmount" placeholder="Monto ($)" min="0">
+                    <button type="button" id="addConsumptionButton">Añadir Consumo</button>
+                </div>
                 <div class="total-amount">Total a Pagar: $<span id="totalAmountDisplay">0.00</span></div>
                 
                 <hr>
@@ -30,11 +35,7 @@ class BillingConsumptionPanel extends HTMLElement {
                         <option value="Cuenta Corriente">Cuenta Corriente (Crédito Hotelero)</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <input type="text" id="consumptionDescription" placeholder="Descripción (ej: Minibar, Lavandería)">
-                    <input type="number" id="consumptionAmount" placeholder="Monto ($)" min="0">
-                    <button type="button" id="addConsumptionButton">Añadir Consumo</button>
-                </div>
+                
             </div>
         `;
     }

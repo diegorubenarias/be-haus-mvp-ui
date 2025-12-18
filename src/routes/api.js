@@ -5,6 +5,8 @@ const { authenticateMiddleware } = require('../auth');
 const bcrypt = require('bcrypt');
 const { Room, Booking, Consumption, Invoice, Employee, Shift, Expense, User, sequelize, Client } = require('../models'); 
 const { Op } = require('sequelize'); // Operadores de Sequelize para consultas complejas
+const { sendBookingConfirmation } = require('../services/email-service'); // Importa el nuevo servicio
+
 
 // Aplicamos el middleware de autenticación a todas las rutas de este router por defecto
 router.use(authenticateMiddleware);
@@ -62,7 +64,7 @@ router.get('/bookings', async (req, res) => {
 
 // Endpoint para crear una nueva reserva
 router.post('/bookings', async (req, res) => {
-     const { room_id, client_id, client_name, start_date, end_date, status } = req.body; 
+     const { room_id, client_id, client_name, start_date, end_date, status, email, notes } = req.body; 
 
     if (!room_id || !client_name || !start_date || !end_date || !status) { 
         return res.status(400).json({ error: "Faltan campos requeridos." });
@@ -98,8 +100,17 @@ router.post('/bookings', async (req, res) => {
             start_date,
             end_date,
             status,
-            price_per_night
+            price_per_night,
+            email,
+            notes
         });
+      /*    await sendBookingConfirmation(email, {
+            client_name,
+            room_name: room.name,
+            start_date,
+            end_date,
+            price_per_night: room.price
+        });*/
         
         res.status(201).json({
             message: "Reserva creada exitosamente",
@@ -116,7 +127,7 @@ router.post('/bookings', async (req, res) => {
 // Endpoint para ACTUALIZAR una reserva existente
 router.put('/bookings/:id', async (req, res) => {
     const { id } = req.params;
-    const { room_id, client_name, start_date, end_date, status, price_per_night } = req.body;
+    const { room_id, client_name, start_date, end_date, status, price_per_night, notes } = req.body;
 
     if (!room_id || !client_name || !start_date || !end_date || !status) {
         return res.status(400).json({ error: "Faltan campos requeridos." });
@@ -124,7 +135,7 @@ router.put('/bookings/:id', async (req, res) => {
     
     try {
         const [updatedRowsCount] = await Booking.update(
-            { room_id, client_name, start_date, end_date, status, price_per_night },
+            { room_id, client_name, start_date, end_date, status, price_per_night, notes },
             { where: { id: id } }
         );
 

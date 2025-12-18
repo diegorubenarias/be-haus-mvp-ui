@@ -49,10 +49,16 @@ class DailySummary extends HTMLElement {
                     <ul id="housekeepingList"></ul>
                 </div>
                  <!-- NUEVA SECCIÓN 2: Empleados -->
-                 <div class="summary-card" style="grid-column: span 3;">
+                 <div class="summary-card" style="grid-column: span 2;">
                     <h4>Personal de Turno Hoy</h4>
                     <ul id="shiftsList"></ul>
                 </div>
+                <!-- NUEVA SECCIÓN 2: Empleados -->
+                 <div class="summary-card" style="grid-column: span 1;">
+                    <h4>Cotizacion del dolar hoy:</h4>
+                    <dollar-price-widget></dollar-price-widget>
+                </div>
+                    
             </div>
         `;
     }

@@ -22,8 +22,8 @@ class DashboardMenu extends HTMLElement {
     render() {
         // --- 1. Definición de la estructura del menú y roles requeridos ---
         const menuConfig = [
-            { href: '/dashboard', label: 'Dashboard', icon: '🏠', roles: ['admin', 'supervisor', 'operador'] },
-            { href: '/planner.html', label: 'Planificador Ocupación', icon: '📅', roles: ['admin', 'supervisor', 'operador'] },
+            { href: '/dashboard', label: 'Dashboard', icon: '🏠', roles: ['admin', 'supervisor', 'operador', 'limpieza'] },
+            { href: '/planner.html', label: 'Planificador Ocupación', icon: '📅', roles: ['admin', 'supervisor', 'operador', 'limpieza'] },
             { 
                 label: 'Reportes', icon: '📊', roles: ['admin', 'supervisor'], 
                 submenu: [
@@ -32,20 +32,20 @@ class DashboardMenu extends HTMLElement {
                     { href: '/profit-loss-report.html', label: 'Ganancias/Pérdidas', roles: ['admin', 'supervisor'] } 
                 ]
             },
-            { href: '/housekeeping.html', label: 'Limpieza', icon: '🧹', roles: ['admin', 'supervisor', 'operador'] },
-            { href: '/invoices.html', label: 'Facturación', icon: '🧾', roles: ['admin', 'supervisor'] },
-            { href: '/expenses.html', label: 'Gastos Operativos', icon: '💸', roles: ['admin', 'supervisor'] },
+            { href: '/housekeeping.html', label: 'Limpieza', icon: '🧹', roles: ['admin', 'supervisor', 'operador', 'limpieza' ] },
+            { href: '/invoices.html', label: 'Facturación', icon: '🧾', roles: ['admin', 'supervisor', 'operador'] },
+            { href: '/expenses.html', label: 'Gastos Operativos', icon: '💸', roles: ['admin', 'supervisor', 'operador'] },
             
             { 
-                label: 'Configuración', icon: '⚙️', roles: ['admin', 'supervisor'], 
+                label: 'Configuración', icon: '⚙️', roles: ['admin', 'supervisor', 'operador', 'limpieza'], 
                 submenu: [
                     { href: '/prices.html', label: 'Precios y Tarifas', roles: ['admin', 'supervisor'] },
                     { href: '/clients.html', label: 'Administrar Clientes', roles: ['admin', 'supervisor', 'operador'] },
                     { href: '/employees.html', label: 'Gestión Empleados', roles: ['admin', 'supervisor'] },
                     // ESTA OPCIÓN ES SOLO PARA ADMINS:
                     { href: '/users-abm.html', label: 'Gestión Usuarios', roles: ['admin'] },
-                    { href: '/shifts-planner.html', label: 'Planificador Turnos', roles: ['admin', 'supervisor'] },
-                    { href: '/settings-panel.html', label: 'Ajustes Cuenta', roles: ['admin', 'supervisor', 'operador'] }
+                    { href: '/shifts-planner.html', label: 'Planificador Turnos', roles: ['admin', 'supervisor', 'operador'] },
+                    { href: '/settings-panel.html', label: 'Ajustes Cuenta', roles: ['admin', 'supervisor', 'operador', 'limpieza'] }
                 ]
             }
         ];

@@ -131,9 +131,12 @@ class BookingModal extends HTMLElement {
     // --- Funciones de Acción ---
 
     async handleSave() {
+        // Obtiene TODOS los datos, incluyendo client_email, gracias a la modificación anterior de getDetails()
         const bookingData = this.shadow.getElementById('detailsForm').getDetails();
-        if (!bookingData.client_name || !bookingData.start_date || !bookingData.end_date) {
-            alert("Por favor complete todos los campos requeridos (Nombre, Fecha Inicio, Fecha Fin).");
+        
+        // Añadimos validación básica para el email si es una nueva reserva o si lo requieres siempre
+        if (!bookingData.client_name || !bookingData.start_date || !bookingData.end_date ) {
+            alert("Por favor complete todos los campos requeridos (Nombre, Fecha Inicio, Fecha Fin, Email).");
             return;
         }
 
@@ -143,8 +146,11 @@ class BookingModal extends HTMLElement {
         try {
             const response = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bookingData)
+                headers: { 
+                    'Content-Type': 'application/json',
+                    // Asegúrate de añadir tu token de auth aquí si lo usas con cookies/localStorage
+                },
+                body: JSON.stringify(bookingData) // Envía el objeto completo, ahora con 'client_email'
             });
 
             if (response.ok) {
@@ -154,13 +160,14 @@ class BookingModal extends HTMLElement {
                 }
                 document.dispatchEvent(new CustomEvent('booking-saved'));
                 this.closeModal(); 
+
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.error || "Error desconocido al guardar reserva.");
+                alert("Error al guardar la reserva: " + (errorData.error || "Error desconocido"));
             }
         } catch (error) {
-            console.error("Error saving booking:", error);
-            alert(`Error de conexión/lógica al guardar la reserva: ${error.message}`);
+            console.error('Fetch error:', error);
+            alert("Hubo un error de conexión con el servidor.");
         }
     }
     
