@@ -42,10 +42,11 @@ async function seedDatabase() {
     // Seed Users
     await User.truncate(); // Limpiamos la tabla de usuarios para evitar duplicados en desarrollo
     const userCount = await User.count();
-    if (userCount === 0) {
-        const passwordTextoPlano = '123456';
+   // if (userCount === 0) {
+        const passwordTextoPlano = 'Behaus2026';
         const hashedPassword = await bcrypt.hash(passwordTextoPlano, 10);
         await User.bulkCreate([
+            { username: 'gustavo.funcia@behaus.com', password: hashedPassword, role: 'admin' },
             { username: 'gabriel.fernandez@behaus.com', password: hashedPassword, role: 'admin' },
             { username: 'nicolas.perone@behaus.com', password: hashedPassword, role: 'operador' },
             { username: 'ariel.jofre@behaus.com', password: hashedPassword, role: 'operador' },
@@ -53,12 +54,11 @@ async function seedDatabase() {
             { username: 'jose.basconcelo@behaus.com', password: hashedPassword, role: 'operador' },
             { username: 'giselle.moreno@behaus.com', password: hashedPassword, role: 'limpieza' },
             { username: 'dalma.orozco@behaus.com', password: hashedPassword, role: 'limpieza' },
-            { username: 'micaela.cabrera@behaus.com', password: hashedPassword, role: 'limpieza' },
-            
+            { username: 'micaela.cabrera@behaus.com', password: hashedPassword, role: 'limpieza' },          
             
         ]);
         console.log("Usuarios iniciales insertados.");
-    }
+    //}
 
     // Seed Employees
    /* const employeeCount = await Employee.count();
